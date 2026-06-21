@@ -35,6 +35,17 @@ docker compose up -d postgres
 pnpm db:migrate
 ```
 
+## Supabase database connections
+
+本番では実行環境ごとに接続URLを分ける。
+
+- Vercel Webの`DATABASE_URL`: Supabase Transaction pooler（port 6543）
+- Trigger.dev collectorの`DATABASE_URL`: IPv6を利用できる場合はDirect connection、IPv4のみの場合はSession pooler（port 5432）
+- migration環境の`DIRECT_DATABASE_URL`: Supabase Direct connection（port 5432）
+- `DATABASE_POOL_MAX`: 初期値は`2`。Webとcollectorの負荷、Supabaseの接続数を確認して環境ごとに調整する
+
+remote DB接続ではTLSを自動的に有効化する。DB URLとpasswordはVercel、Trigger.dev、migration実行環境のsecretとして管理し、クライアントへ公開しない。
+
 ## Verification
 
 The standard local gate is:

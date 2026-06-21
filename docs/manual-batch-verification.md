@@ -83,6 +83,14 @@ docker compose up -d postgres
 pnpm db:migrate
 ```
 
+Supabase stagingでは、migrationにDirect connectionを使い、collector runtimeにはDirect connectionまたはIPv4向けSession poolerを使う。
+
+```bash
+DIRECT_DATABASE_URL='<Supabase Direct connection URL>' pnpm db:migrate
+```
+
+URLとpasswordはshell historyやログへ残さないこと。上記は変数の用途を示す例であり、実運用では承認済みsecret storeから注入する。
+
 `.env`をshellへ読み込み、件数と並列数を絞って実行する。
 
 ```bash
@@ -191,6 +199,7 @@ SUMMARY_CHUNK_CHARS=12000
 ```
 
 `DATABASE_URL`と`GEMINI_API_KEY`はSecretとして設定する。
+`DATABASE_POOL_MAX=2`を設定し、Supabaseの接続数を監視してから増やす。
 
 dashboardから`collect-news`を実行し、以下を確認する。
 

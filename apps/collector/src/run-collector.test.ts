@@ -42,6 +42,35 @@ describe("runCollector", () => {
     expect(result.feedCount).toBe(1);
   });
 
+  it("closes persistence created for a collector run", async () => {
+    const close = vi.fn(async () => undefined);
+    const persistence = {
+      close,
+      findArticleByNormalizedUrl: vi.fn(),
+      finishFeedJob: vi.fn(),
+      markArticleFailed: vi.fn(),
+      saveArticle: vi.fn(),
+      startFeedJob: vi.fn(),
+      updateArticleMetrics: vi.fn(),
+    };
+
+    await runCollector({
+      config: {
+        ...baseConfig,
+        databaseUrl: "postgres://user:password@db.example.com:5432/postgres",
+        dryRun: false,
+      },
+      dependencies: {
+        createPersistence: () => persistence,
+        logger: () => undefined,
+        summarizer: { summarize: vi.fn() },
+      },
+      feeds: [],
+    });
+
+    expect(close).toHaveBeenCalledOnce();
+  });
+
   it("fetches RSS items, summarizes them, and saves article data", async () => {
     const savedArticles: unknown[] = [];
     const finishedJobs: unknown[] = [];

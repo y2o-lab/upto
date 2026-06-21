@@ -70,6 +70,7 @@ Trigger.dev dashboardのProject Settings > Environment Variablesでstaging / pro
 | 変数 | secret | 用途 | 初期値の目安 |
 |---|---:|---|---|
 | `DATABASE_URL` | Yes | Upto PostgreSQL接続 | runnerから到達可能なURL |
+| `DATABASE_POOL_MAX` | No | taskごとのDB Pool上限 | `2` |
 | `GEMINI_API_KEY` | Yes | Gemini API認証 | production key |
 | `GEMINI_MODEL_DEFAULT` | No | 通常記事モデル | `gemini-3.1-flash-lite` |
 | `GEMINI_MODEL_IMPORTANT` | No | 重要記事モデル | `gemini-3.0-flash` |
@@ -226,7 +227,10 @@ Trigger.dev dashboardのRunsから以下を確認する。
 
 Trigger.dev taskのdeployとDB migrationは分離する。schema変更があるreleaseでは、task deploymentの前にbackupを取得し、承認済みの運用環境からmigrationを1回だけ実行する。
 
+Supabaseを利用する場合、Trigger.dev runtimeの`DATABASE_URL`にはDirect connectionを使用する。runnerがIPv4のみの場合はShared PoolerのSession modeを使用する。migrationにはpooler URLを流用せず、`DIRECT_DATABASE_URL`へDirect connectionを設定する。
+
 ```bash
+export DIRECT_DATABASE_URL='<Supabase Direct connection URL>'
 pnpm --filter @upto/db db:migrate
 ```
 
@@ -281,7 +285,7 @@ Trigger.dev self-hosted環境にはmanaged auto-scaling、warm start、checkpoin
 
 ## Web deployment
 
-Webはこの変更の対象外である。Vercelまたは既存のオンプレ構成を継続する。WebからUpto PostgreSQLへ接続する`DATABASE_URL`はWeb runtimeのnetwork基準で設定し、Trigger.dev runner用URLと同じとは限らない。
+WebはVercelまたは既存のオンプレ構成を継続する。Vercelでは`DATABASE_URL`にSupabase Transaction pooler（port 6543）を設定し、`DATABASE_POOL_MAX=2`から開始する。Web runtimeとTrigger.dev runnerでは推奨される接続方式が異なるため、同じSupabase DBを利用してもURLを流用しない。
 
 ## トラブルシュート
 
