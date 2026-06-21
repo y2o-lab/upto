@@ -39,6 +39,8 @@ pnpm db:migrate
 
 本番では実行環境ごとに接続URLを分ける。
 
+設定、migration、疎通確認、rollbackの詳細は[Supabase接続デプロイ手順書](docs/supabase-deployment-runbook.md)を参照する。
+
 - Vercel Webの`DATABASE_URL`: Supabase Transaction pooler（port 6543）
 - Trigger.dev collectorの`DATABASE_URL`: IPv6を利用できる場合はDirect connection、IPv4のみの場合はSession pooler（port 5432）
 - migration環境の`DIRECT_DATABASE_URL`: Supabase Direct connection（port 5432）

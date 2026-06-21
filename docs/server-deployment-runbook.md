@@ -227,6 +227,8 @@ Trigger.dev dashboardのRunsから以下を確認する。
 
 Trigger.dev taskのdeployとDB migrationは分離する。schema変更があるreleaseでは、task deploymentの前にbackupを取得し、承認済みの運用環境からmigrationを1回だけ実行する。
 
+SupabaseへWebとcollectorの両方を接続する初回設定と受入確認は、[Supabase接続デプロイ手順書](supabase-deployment-runbook.md)に従う。
+
 Supabaseを利用する場合、Trigger.dev runtimeの`DATABASE_URL`にはDirect connectionを使用する。runnerがIPv4のみの場合はShared PoolerのSession modeを使用する。migrationにはpooler URLを流用せず、`DIRECT_DATABASE_URL`へDirect connectionを設定する。
 
 ```bash
