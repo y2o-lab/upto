@@ -12,7 +12,7 @@ The accepted MVP direction is documented in [docs/adr/0001-technology-stack.md](
 - React 19, Tailwind CSS v4, shadcn/ui
 - PostgreSQL
 - Drizzle ORM and Drizzle Kit
-- Ubuntu Server, Docker Compose, and systemd timer for the collector batch
+- Ubuntu Server, Coolify, and self-hosted Trigger.dev for collector deployment and execution
 - Gemini API through `@google/genai`
 - oxlint and oxfmt for fast linting and formatting
 - Vitest and Playwright for verification
@@ -34,12 +34,15 @@ Treat the ADR as the source of truth when implementation details are ambiguous. 
 
 - Put web code under `apps/web`.
 - Put collector and scheduled batch code under `apps/collector`.
+- Put Trigger.dev task entrypoints under `apps/collector/src/trigger` and keep them as thin adapters over testable collector logic.
 - Put Drizzle schema, migrations, and DB client code under `packages/db`.
 - Put shared domain logic, normalization, scoring, and validation schemas under `packages/domain`.
 - Keep collector work idempotent. A single article failure must not fail the whole crawl when the rest of the batch can continue.
 - Store job status, retry counts, and error summaries in the database design when implementing batch persistence.
 - Prefer explicit Zod schemas for external inputs and LLM JSON outputs.
 - Keep Gemini model names, API keys, database URLs, and deployment-specific settings in environment variables.
+- Manage batch schedules, logs, execution history, and reruns in Trigger.dev. Do not add systemd timers for collector execution.
+- Keep Trigger.dev task runtime secrets in Trigger.dev and deployment credentials in Coolify; never bake either into Docker images or build arguments.
 
 ## Frontend constraints
 
@@ -76,6 +79,18 @@ pnpm exec playwright test
 Use `pnpm format` to apply oxfmt. Do not add ESLint or Prettier unless the user explicitly reverses the oxlint/oxfmt decision.
 
 When changing only Markdown or Codex harness files, validate the relevant harness syntax instead of pretending application tests exist.
+
+For Trigger.dev or collector deployment changes, also run the narrowest applicable checks:
+
+```bash
+pnpm --filter @upto/collector test
+pnpm --filter @upto/collector typecheck
+pnpm trigger:deploy:dry-run
+sh -n apps/collector/scripts/deploy-trigger.sh
+docker build -f apps/collector/Dockerfile.trigger-deploy .
+```
+
+`pnpm trigger:deploy:dry-run` requires non-secret Trigger.dev connection settings. Docker deployment checks must not mount the host Docker socket.
 
 For Codex harness changes, run:
 

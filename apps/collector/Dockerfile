@@ -11,11 +11,16 @@ RUN pnpm install --frozen-lockfile
 
 FROM deps AS build
 COPY . .
-RUN pnpm --filter @upto/collector build
+RUN pnpm --filter @upto/domain build \
+  && pnpm --filter @upto/db build \
+  && pnpm --filter @upto/collector build
 
 FROM node:24-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 RUN corepack enable
 COPY --from=build /app ./
+RUN sed -i 's#./src/index.ts#./dist/index.js#g' \
+  packages/domain/package.json \
+  packages/db/package.json
 CMD ["pnpm", "--filter", "@upto/collector", "start"]

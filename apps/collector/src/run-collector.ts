@@ -25,7 +25,9 @@ export type RunCollectorResult = {
   articleCount: number;
   dryRun: boolean;
   failedCount: number;
+  failedFeedCount: number;
   feedCount: number;
+  successfulFeedCount: number;
 };
 
 export async function runCollector(input: RunCollectorInput): Promise<RunCollectorResult> {
@@ -46,7 +48,9 @@ export async function runCollector(input: RunCollectorInput): Promise<RunCollect
       articleCount: 0,
       dryRun: true,
       failedCount: 0,
+      failedFeedCount: 0,
       feedCount: input.feeds.length,
+      successfulFeedCount: input.feeds.length,
     };
   }
 
@@ -72,12 +76,14 @@ export async function runCollector(input: RunCollectorInput): Promise<RunCollect
   const articleLimit = pLimit(input.config.concurrency);
 
   let articleCount = 0;
+  let failedFeedCount = 0;
   let totalFailedCount = 0;
 
   for (const feed of input.feeds) {
     const job = await persistence.startFeedJob(feed);
     let feedFetchedCount = 0;
     let feedFailedCount = 0;
+    let feedFetchFailed = false;
     const feedErrors: string[] = [];
 
     logger({
@@ -122,6 +128,7 @@ export async function runCollector(input: RunCollectorInput): Promise<RunCollect
         ),
       );
     } catch (error) {
+      feedFetchFailed = true;
       feedFailedCount += 1;
       const errorMessage = error instanceof Error ? error.message : String(error);
       feedErrors.push(errorMessage);
@@ -133,6 +140,9 @@ export async function runCollector(input: RunCollectorInput): Promise<RunCollect
     }
 
     totalFailedCount += feedFailedCount;
+    if (feedFetchFailed) {
+      failedFeedCount += 1;
+    }
     await persistence.finishFeedJob(job.jobId, {
       errorSummary: feedErrors.length > 0 ? feedErrors.slice(0, 10).join("\n") : null,
       failedCount: feedFailedCount,
@@ -152,7 +162,9 @@ export async function runCollector(input: RunCollectorInput): Promise<RunCollect
     articleCount,
     dryRun: false,
     failedCount: totalFailedCount,
+    failedFeedCount,
     feedCount: input.feeds.length,
+    successfulFeedCount: input.feeds.length - failedFeedCount,
   };
 }
 

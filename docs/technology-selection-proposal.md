@@ -1,5 +1,7 @@
 # ニュース要約アプリ 技術選定提案書
 
+> 2026-06-20 追記: この文書のバッチ基盤に関する Docker Compose + systemd timer の記述は初期提案であり、現行決定ではない。現在のデプロイ・実行管理は [ADR-0004](adr/0004-batch-deployment-with-trigger-dev.md) に従い、オンプレの Coolify とセルフホスト版 Trigger.dev を使用する。
+
 作成日: 2026-06-07  
 対象: Web アプリケーション、ニュース収集・本文抽出・要約バッチ
 

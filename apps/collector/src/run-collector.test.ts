@@ -126,7 +126,9 @@ describe("runCollector", () => {
       articleCount: 1,
       dryRun: false,
       failedCount: 0,
+      failedFeedCount: 0,
       feedCount: 1,
+      successfulFeedCount: 1,
     });
     expect(savedArticles).toHaveLength(1);
     expect(finishedJobs).toEqual([
@@ -311,7 +313,9 @@ describe("runCollector", () => {
       articleCount: 0,
       dryRun: false,
       failedCount: 0,
+      failedFeedCount: 0,
       feedCount: 1,
+      successfulFeedCount: 1,
     });
     expect(summarize).not.toHaveBeenCalled();
     expect(logEvents).toContainEqual({
@@ -492,6 +496,77 @@ describe("runCollector", () => {
       status: "article_skipped_duplicate",
       url: "https://example.com/articles/same?utm_source=test",
     });
+  });
+
+  it("reports a feed-level failure when the feed cannot be fetched", async () => {
+    const finishedJobs: unknown[] = [];
+    const persistence: Persistence = {
+      async findArticleByNormalizedUrl() {
+        return null;
+      },
+      async finishFeedJob(_jobId, result) {
+        finishedJobs.push(result);
+      },
+      async markArticleFailed() {
+        return undefined;
+      },
+      async saveArticle() {
+        throw new Error("saveArticle should not be called");
+      },
+      async startFeedJob() {
+        return {
+          feedEndpointId: "feed-1",
+          jobId: "job-1",
+          sourceId: "source-1",
+        };
+      },
+      async updateArticleMetrics() {
+        return undefined;
+      },
+    };
+
+    const result = await runCollector({
+      config: {
+        ...baseConfig,
+        dryRun: false,
+      },
+      dependencies: {
+        fetcher: async () => {
+          throw new Error("feed unavailable");
+        },
+        logger: () => undefined,
+        persistence,
+        summarizer: {
+          async summarize() {
+            throw new Error("summarize should not be called");
+          },
+        },
+      },
+      feeds: [
+        {
+          kind: "rss",
+          name: "Example",
+          siteUrl: "https://example.com",
+          url: "https://example.com/feed.xml",
+        },
+      ],
+    });
+
+    expect(result).toEqual({
+      articleCount: 0,
+      dryRun: false,
+      failedCount: 1,
+      failedFeedCount: 1,
+      feedCount: 1,
+      successfulFeedCount: 0,
+    });
+    expect(finishedJobs).toEqual([
+      {
+        errorSummary: "feed unavailable",
+        failedCount: 1,
+        fetchedCount: 0,
+      },
+    ]);
   });
 });
 

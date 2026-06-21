@@ -71,3 +71,4 @@ DB ホスティングは Supabase Postgres またはオンプレ PostgreSQL と�
 
 - 2026-06-07: 初版作成。技術選定提案書の内容と、オンプレ Ubuntu バッチ基盤の方針を Accepted として記録。
 - 2026-06-07: 開発ハーネス、linter/formatter、自己フィードバック hook の詳細は ADR-0002 に分離して Accepted とした。
+- 2026-06-20: バッチ基盤のうち、Docker Compose + systemd timer によるデプロイ・スケジュール・実行・ログ管理の決定は Superseded by ADR-0004。バッチは引き続きオンプレで運用し、Coolify とセルフホスト版 Trigger.dev で管理する。
