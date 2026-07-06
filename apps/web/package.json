@@ -15,19 +15,19 @@
   "dependencies": {
     "@upto/db": "workspace:*",
     "@upto/domain": "workspace:*",
-    "dexie": "^4.4.3",
-    "next": "16.2.9",
+    "dexie": "^4.4.4",
+    "next": "16.2.10",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "@storybook/addon-docs": "10.4.4",
-    "@storybook/nextjs-vite": "10.4.4",
-    "@tailwindcss/postcss": "4.3.1",
+    "@storybook/addon-docs": "10.4.6",
+    "@storybook/nextjs-vite": "10.4.6",
+    "@tailwindcss/postcss": "4.3.2",
     "fake-indexeddb": "^6.2.5",
-    "storybook": "10.4.4",
-    "tailwindcss": "4.3.1",
-    "vite": "8.0.16"
+    "storybook": "10.4.6",
+    "tailwindcss": "4.3.2",
+    "vite": "8.1.3"
   }
 }
