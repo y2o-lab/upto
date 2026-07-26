@@ -5,7 +5,7 @@ import type { CollectorConfig } from "./config.js";
 
 import { extractArticleContent } from "./content.js";
 import { feedEndpointUrl, fetchFeedItems, type FeedItem, type FeedTarget } from "./feeds.js";
-import { createPersistence, type Persistence } from "./persistence.js";
+import { createPersistence, type ManagedPersistence, type Persistence } from "./persistence.js";
 import { createGeminiSummarizer, type Summarizer } from "./summarizer.js";
 
 export type RunCollectorInput = {
@@ -15,6 +15,7 @@ export type RunCollectorInput = {
 };
 
 export type RunCollectorDependencies = {
+  createPersistence?: (databaseUrl: string) => ManagedPersistence;
   fetcher?: typeof fetch;
   logger?: (event: Record<string, unknown>) => void;
   persistence?: Persistence;
@@ -25,7 +26,9 @@ export type RunCollectorResult = {
   articleCount: number;
   dryRun: boolean;
   failedCount: number;
+  failedFeedCount: number;
   feedCount: number;
+  successfulFeedCount: number;
 };
 
 export async function runCollector(input: RunCollectorInput): Promise<RunCollectorResult> {
@@ -36,32 +39,41 @@ export async function runCollector(input: RunCollectorInput): Promise<RunCollect
       throw new Error("DATABASE_URL is required when DEBUG=true.");
     }
 
-    const persistence =
-      input.dependencies?.persistence ?? createPersistence(input.config.databaseUrl ?? "");
-    if (!persistence.runInRollbackTransaction) {
-      throw new Error("DEBUG=true requires persistence with rollback transaction support.");
+    const managedPersistence = input.dependencies?.persistence
+      ? null
+      : (input.dependencies?.createPersistence ?? createPersistence)(
+          input.config.databaseUrl ?? "",
+        );
+    const persistence = input.dependencies?.persistence ?? managedPersistence;
+
+    try {
+      if (!persistence?.runInRollbackTransaction) {
+        throw new Error("DEBUG=true requires persistence with rollback transaction support.");
+      }
+
+      logger({
+        debug: true,
+        feeds: input.feeds.map((feed) => ({
+          endpoint: feedEndpointUrl(feed),
+          kind: feed.kind,
+          name: feed.name,
+        })),
+        message:
+          "Collector debug mode will roll back all DB writes. External network and LLM requests are skipped.",
+      });
+
+      return await persistence.runInRollbackTransaction((transactionalPersistence) =>
+        runCollectorWithPersistence({
+          config: input.config,
+          feeds: input.feeds,
+          logger,
+          persistence: transactionalPersistence,
+          skipExternalRequests: true,
+        }),
+      );
+    } finally {
+      await managedPersistence?.close();
     }
-
-    logger({
-      debug: true,
-      feeds: input.feeds.map((feed) => ({
-        endpoint: feedEndpointUrl(feed),
-        kind: feed.kind,
-        name: feed.name,
-      })),
-      message:
-        "Collector debug mode will roll back all DB writes. External network and LLM requests are skipped.",
-    });
-
-    return persistence.runInRollbackTransaction((transactionalPersistence) =>
-      runCollectorWithPersistence({
-        config: input.config,
-        feeds: input.feeds,
-        logger,
-        persistence: transactionalPersistence,
-        skipExternalRequests: true,
-      }),
-    );
   }
 
   if (input.config.dryRun) {
@@ -79,7 +91,9 @@ export async function runCollector(input: RunCollectorInput): Promise<RunCollect
       articleCount: 0,
       dryRun: true,
       failedCount: 0,
+      failedFeedCount: 0,
       feedCount: input.feeds.length,
+      successfulFeedCount: input.feeds.length,
     };
   }
 
@@ -91,26 +105,35 @@ export async function runCollector(input: RunCollectorInput): Promise<RunCollect
     throw new Error("GEMINI_API_KEY is required when COLLECTOR_DRY_RUN=false.");
   }
 
-  const persistence =
-    input.dependencies?.persistence ?? createPersistence(input.config.databaseUrl ?? "");
-  const summarizer =
-    input.dependencies?.summarizer ??
-    createGeminiSummarizer({
-      apiKey: input.config.geminiApiKey ?? "",
-      chunkSize: input.config.summaryChunkChars,
-      defaultModel: input.config.geminiModelDefault,
-      importantModel: input.config.geminiModelImportant,
-    });
-  const fetcher = input.dependencies?.fetcher ?? fetch;
+  const managedPersistence = input.dependencies?.persistence
+    ? null
+    : (input.dependencies?.createPersistence ?? createPersistence)(input.config.databaseUrl ?? "");
+  const persistence = input.dependencies?.persistence ?? managedPersistence;
+  if (!persistence) {
+    throw new Error("Failed to create collector persistence.");
+  }
 
-  return runCollectorWithPersistence({
-    config: input.config,
-    fetcher,
-    feeds: input.feeds,
-    logger,
-    persistence,
-    summarizer,
-  });
+  try {
+    const summarizer =
+      input.dependencies?.summarizer ??
+      createGeminiSummarizer({
+        apiKey: input.config.geminiApiKey ?? "",
+        chunkSize: input.config.summaryChunkChars,
+        defaultModel: input.config.geminiModelDefault,
+        importantModel: input.config.geminiModelImportant,
+      });
+    const fetcher = input.dependencies?.fetcher ?? fetch;
+    return await runCollectorWithPersistence({
+      config: input.config,
+      fetcher,
+      feeds: input.feeds,
+      logger,
+      persistence,
+      summarizer,
+    });
+  } finally {
+    await managedPersistence?.close();
+  }
 }
 
 type RunCollectorWithPersistenceInput = {
@@ -127,14 +150,15 @@ async function runCollectorWithPersistence(
   input: RunCollectorWithPersistenceInput,
 ): Promise<RunCollectorResult> {
   const articleLimit = pLimit(input.config.concurrency);
-
   let articleCount = 0;
+  let failedFeedCount = 0;
   let totalFailedCount = 0;
 
   for (const feed of input.feeds) {
     const job = await input.persistence.startFeedJob(feed);
     let feedFetchedCount = 0;
     let feedFailedCount = 0;
+    let feedFetchFailed = false;
     const feedErrors: string[] = [];
 
     input.logger({
@@ -151,8 +175,7 @@ async function runCollectorWithPersistence(
         status: "debug_external_requests_skipped",
       });
     } else {
-      const fetcher = input.fetcher;
-      const summarizer = input.summarizer;
+      const { fetcher, summarizer } = input;
       if (!fetcher || !summarizer) {
         throw new Error("Fetcher and summarizer are required outside DEBUG mode.");
       }
@@ -192,6 +215,7 @@ async function runCollectorWithPersistence(
           ),
         );
       } catch (error) {
+        feedFetchFailed = true;
         feedFailedCount += 1;
         const errorMessage = error instanceof Error ? error.message : String(error);
         feedErrors.push(errorMessage);
@@ -204,12 +228,14 @@ async function runCollectorWithPersistence(
     }
 
     totalFailedCount += feedFailedCount;
+    if (feedFetchFailed) {
+      failedFeedCount += 1;
+    }
     await input.persistence.finishFeedJob(job.jobId, {
       errorSummary: feedErrors.length > 0 ? feedErrors.slice(0, 10).join("\n") : null,
       failedCount: feedFailedCount,
       fetchedCount: feedFetchedCount,
     });
-
     input.logger({
       failedCount: feedFailedCount,
       feed: feed.name,
@@ -223,7 +249,9 @@ async function runCollectorWithPersistence(
     articleCount,
     dryRun: false,
     failedCount: totalFailedCount,
+    failedFeedCount,
     feedCount: input.feeds.length,
+    successfulFeedCount: input.feeds.length - failedFeedCount,
   };
 }
 

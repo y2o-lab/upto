@@ -1,0 +1,13 @@
+.codex
+.env
+.env.*
+!.env.example
+.git
+.github
+.pnpm-store
+**/dist
+**/node_modules
+**/*.tsbuildinfo
+docs
+test-results
+playwright-report

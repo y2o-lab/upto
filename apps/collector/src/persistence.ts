@@ -5,6 +5,7 @@ import {
   articleMetrics,
   articles,
   articleSummaries,
+  closeDb,
   createDb,
   crawlJobs,
   eq,
@@ -49,6 +50,10 @@ export type Persistence = {
   updateArticleMetrics(input: UpdateArticleMetricsInput): Promise<void>;
 };
 
+export type ManagedPersistence = Persistence & {
+  close(): Promise<void>;
+};
+
 export type FinishFeedJobInput = {
   errorSummary: string | null;
   failedCount: number;
@@ -69,17 +74,18 @@ export type UpdateArticleMetricsInput = {
   views: number;
 };
 
-export function createPersistence(databaseUrl: string): Persistence {
+export function createPersistence(databaseUrl: string): ManagedPersistence {
   const db = createDb(databaseUrl);
-  return new DbPersistence(db, db.transaction.bind(db));
+  return new DbPersistence(db, db.transaction.bind(db), db);
 }
 
 type DbExecutor = Pick<DbClient, "insert" | "select" | "update">;
 
-class DbPersistence implements Persistence {
+class DbPersistence implements ManagedPersistence {
   constructor(
     private readonly db: DbExecutor,
     private readonly transaction?: DbClient["transaction"],
+    private readonly rootDb?: DbClient,
   ) {}
 
   async runInRollbackTransaction<T>(
@@ -102,6 +108,12 @@ class DbPersistence implements Persistence {
     }
 
     throw new Error("Debug transaction completed without rolling back.");
+  }
+
+  async close(): Promise<void> {
+    if (this.rootDb) {
+      await closeDb(this.rootDb);
+    }
   }
 
   async startFeedJob(feed: FeedTarget): Promise<FeedJob> {

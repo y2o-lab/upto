@@ -13,6 +13,7 @@
   "dependencies": {
     "@google/genai": "2.8.0",
     "@mozilla/readability": "0.6.0",
+    "@trigger.dev/sdk": "4.4.6",
     "@upto/db": "workspace:*",
     "@upto/domain": "workspace:*",
     "fast-xml-parser": "5.8.0",
