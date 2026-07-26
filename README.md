@@ -28,6 +28,8 @@ pnpm dev:collector
 
 The collector defaults to `COLLECTOR_DRY_RUN=true`, so it can be started without database or Gemini credentials.
 
+Set `DEBUG=true` to run only the collector's database lifecycle inside a transaction that is always rolled back. This mode requires `DATABASE_URL`, but skips RSS, article-content, Gemini, and other external requests.
+
 For local PostgreSQL:
 
 ```bash

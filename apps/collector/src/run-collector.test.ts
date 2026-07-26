@@ -8,6 +8,7 @@ import { runCollector } from "./run-collector.js";
 
 const baseConfig = {
   concurrency: 1,
+  debug: false,
   dryRun: true,
   geminiModelDefault: "gemini-3.1-flash-lite",
   geminiModelImportant: "gemini-3.0-flash",
@@ -40,6 +41,87 @@ describe("runCollector", () => {
 
     expect(result.dryRun).toBe(true);
     expect(result.feedCount).toBe(1);
+  });
+
+  it("rolls back database writes and skips external requests in debug mode", async () => {
+    const finishedJobs: unknown[] = [];
+    const logEvents: Record<string, unknown>[] = [];
+    const fetcher = vi.fn<typeof fetch>();
+    const summarize = vi.fn<Summarizer["summarize"]>();
+    let rollbackTransactionCount = 0;
+    const persistence: Persistence = {
+      async findArticleByNormalizedUrl() {
+        throw new Error("findArticleByNormalizedUrl should not be called");
+      },
+      async finishFeedJob(_jobId, result) {
+        finishedJobs.push(result);
+      },
+      async markArticleFailed() {
+        throw new Error("markArticleFailed should not be called");
+      },
+      async runInRollbackTransaction<T>(callback: (transaction: Persistence) => Promise<T>) {
+        rollbackTransactionCount += 1;
+        return callback(persistence);
+      },
+      async saveArticle() {
+        throw new Error("saveArticle should not be called");
+      },
+      async startFeedJob() {
+        return {
+          feedEndpointId: "feed-1",
+          jobId: "job-1",
+          sourceId: "source-1",
+        };
+      },
+      async updateArticleMetrics() {
+        throw new Error("updateArticleMetrics should not be called");
+      },
+    };
+
+    const result = await runCollector({
+      config: {
+        ...baseConfig,
+        debug: true,
+      },
+      dependencies: {
+        fetcher,
+        logger: (event) => logEvents.push(event),
+        persistence,
+        summarizer: {
+          summarize,
+        },
+      },
+      feeds: [
+        {
+          kind: "rss",
+          name: "Example",
+          siteUrl: "https://example.com",
+          url: "https://example.com/feed.xml",
+        },
+      ],
+    });
+
+    expect(result).toEqual({
+      articleCount: 0,
+      dryRun: false,
+      failedCount: 0,
+      feedCount: 1,
+    });
+    expect(rollbackTransactionCount).toBe(1);
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(summarize).not.toHaveBeenCalled();
+    expect(finishedJobs).toEqual([
+      {
+        errorSummary: null,
+        failedCount: 0,
+        fetchedCount: 0,
+      },
+    ]);
+    expect(logEvents).toContainEqual({
+      feed: "Example",
+      jobId: "job-1",
+      status: "debug_external_requests_skipped",
+    });
   });
 
   it("fetches RSS items, summarizes them, and saves article data", async () => {

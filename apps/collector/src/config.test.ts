@@ -15,6 +15,18 @@ describe("readCollectorConfig", () => {
     expect(readCollectorConfig({}).dryRun).toBe(true);
   });
 
+  it("parses DEBUG=true as debug mode", () => {
+    expect(
+      readCollectorConfig({
+        DEBUG: "true",
+      }).debug,
+    ).toBe(true);
+  });
+
+  it("defaults debug mode to false", () => {
+    expect(readCollectorConfig({}).debug).toBe(false);
+  });
+
   it("defaults to the production Gemini models", () => {
     expect(readCollectorConfig({})).toMatchObject({
       geminiModelDefault: "gemini-3.1-flash-lite",

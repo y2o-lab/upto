@@ -31,6 +31,39 @@ export type RunCollectorResult = {
 export async function runCollector(input: RunCollectorInput): Promise<RunCollectorResult> {
   const logger = input.dependencies?.logger ?? ((event) => console.log(JSON.stringify(event)));
 
+  if (input.config.debug) {
+    if (!input.config.databaseUrl && !input.dependencies?.persistence) {
+      throw new Error("DATABASE_URL is required when DEBUG=true.");
+    }
+
+    const persistence =
+      input.dependencies?.persistence ?? createPersistence(input.config.databaseUrl ?? "");
+    if (!persistence.runInRollbackTransaction) {
+      throw new Error("DEBUG=true requires persistence with rollback transaction support.");
+    }
+
+    logger({
+      debug: true,
+      feeds: input.feeds.map((feed) => ({
+        endpoint: feedEndpointUrl(feed),
+        kind: feed.kind,
+        name: feed.name,
+      })),
+      message:
+        "Collector debug mode will roll back all DB writes. External network and LLM requests are skipped.",
+    });
+
+    return persistence.runInRollbackTransaction((transactionalPersistence) =>
+      runCollectorWithPersistence({
+        config: input.config,
+        feeds: input.feeds,
+        logger,
+        persistence: transactionalPersistence,
+        skipExternalRequests: true,
+      }),
+    );
+  }
+
   if (input.config.dryRun) {
     logger({
       dryRun: true,
@@ -69,77 +102,115 @@ export async function runCollector(input: RunCollectorInput): Promise<RunCollect
       importantModel: input.config.geminiModelImportant,
     });
   const fetcher = input.dependencies?.fetcher ?? fetch;
+
+  return runCollectorWithPersistence({
+    config: input.config,
+    fetcher,
+    feeds: input.feeds,
+    logger,
+    persistence,
+    summarizer,
+  });
+}
+
+type RunCollectorWithPersistenceInput = {
+  config: CollectorConfig;
+  fetcher?: typeof fetch;
+  feeds: FeedTarget[];
+  logger: (event: Record<string, unknown>) => void;
+  persistence: Persistence;
+  skipExternalRequests?: boolean;
+  summarizer?: Summarizer;
+};
+
+async function runCollectorWithPersistence(
+  input: RunCollectorWithPersistenceInput,
+): Promise<RunCollectorResult> {
   const articleLimit = pLimit(input.config.concurrency);
 
   let articleCount = 0;
   let totalFailedCount = 0;
 
   for (const feed of input.feeds) {
-    const job = await persistence.startFeedJob(feed);
+    const job = await input.persistence.startFeedJob(feed);
     let feedFetchedCount = 0;
     let feedFailedCount = 0;
     const feedErrors: string[] = [];
 
-    logger({
+    input.logger({
       endpoint: feedEndpointUrl(feed),
       feed: feed.name,
       jobId: job.jobId,
       status: "started",
     });
 
-    try {
-      const items = await fetchFeedItems(feed, input.config.maxItemsPerFeed, fetcher);
-      await Promise.all(
-        items.map((item) =>
-          articleLimit(async () => {
-            try {
-              const result = await processFeedItem({
-                feed,
-                fetcher,
-                item,
-                logger,
-                persistence,
-                sourceId: job.sourceId,
-                summarizer,
-              });
-              if (result === "processed") {
-                articleCount += 1;
-                feedFetchedCount += 1;
-              }
-            } catch (error) {
-              feedFailedCount += 1;
-              const errorMessage = error instanceof Error ? error.message : String(error);
-              feedErrors.push(`${item.url}: ${errorMessage}`);
-              await markItemFailedIfPossible(persistence, job.sourceId, item, error);
-              logger({
-                error: errorMessage,
-                feed: feed.name,
-                status: "article_failed",
-                url: item.url,
-              });
-            }
-          }),
-        ),
-      );
-    } catch (error) {
-      feedFailedCount += 1;
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      feedErrors.push(errorMessage);
-      logger({
-        error: errorMessage,
+    if (input.skipExternalRequests) {
+      input.logger({
         feed: feed.name,
-        status: "feed_failed",
+        jobId: job.jobId,
+        status: "debug_external_requests_skipped",
       });
+    } else {
+      const fetcher = input.fetcher;
+      const summarizer = input.summarizer;
+      if (!fetcher || !summarizer) {
+        throw new Error("Fetcher and summarizer are required outside DEBUG mode.");
+      }
+
+      try {
+        const items = await fetchFeedItems(feed, input.config.maxItemsPerFeed, fetcher);
+        await Promise.all(
+          items.map((item) =>
+            articleLimit(async () => {
+              try {
+                const result = await processFeedItem({
+                  feed,
+                  fetcher,
+                  item,
+                  logger: input.logger,
+                  persistence: input.persistence,
+                  sourceId: job.sourceId,
+                  summarizer,
+                });
+                if (result === "processed") {
+                  articleCount += 1;
+                  feedFetchedCount += 1;
+                }
+              } catch (error) {
+                feedFailedCount += 1;
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                feedErrors.push(`${item.url}: ${errorMessage}`);
+                await markItemFailedIfPossible(input.persistence, job.sourceId, item, error);
+                input.logger({
+                  error: errorMessage,
+                  feed: feed.name,
+                  status: "article_failed",
+                  url: item.url,
+                });
+              }
+            }),
+          ),
+        );
+      } catch (error) {
+        feedFailedCount += 1;
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        feedErrors.push(errorMessage);
+        input.logger({
+          error: errorMessage,
+          feed: feed.name,
+          status: "feed_failed",
+        });
+      }
     }
 
     totalFailedCount += feedFailedCount;
-    await persistence.finishFeedJob(job.jobId, {
+    await input.persistence.finishFeedJob(job.jobId, {
       errorSummary: feedErrors.length > 0 ? feedErrors.slice(0, 10).join("\n") : null,
       failedCount: feedFailedCount,
       fetchedCount: feedFetchedCount,
     });
 
-    logger({
+    input.logger({
       failedCount: feedFailedCount,
       feed: feed.name,
       fetchedCount: feedFetchedCount,

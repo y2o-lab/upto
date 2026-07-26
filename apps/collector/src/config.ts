@@ -28,6 +28,7 @@ const booleanEnvironmentSchema = z
 export const collectorConfigSchema = z.object({
   concurrency: z.coerce.number().int().positive().default(2),
   databaseUrl: z.string().optional(),
+  debug: booleanEnvironmentSchema.default(false),
   dryRun: booleanEnvironmentSchema.default(true),
   geminiApiKey: z.string().optional(),
   geminiModelDefault: z.string().default("gemini-3.1-flash-lite"),
@@ -42,6 +43,7 @@ export function readCollectorConfig(environment: NodeJS.ProcessEnv = process.env
   return collectorConfigSchema.parse({
     concurrency: environment.COLLECTOR_CONCURRENCY,
     databaseUrl: environment.DATABASE_URL,
+    debug: environment.DEBUG,
     dryRun: environment.COLLECTOR_DRY_RUN,
     geminiApiKey: environment.GEMINI_API_KEY,
     geminiModelDefault: environment.GEMINI_MODEL_DEFAULT,

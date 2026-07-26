@@ -75,6 +75,7 @@ DATABASE_URL=postgres://upto:upto@postgres:5432/upto
 GEMINI_API_KEY=replace-with-production-key
 GEMINI_MODEL_DEFAULT=gemini-3.1-flash-lite
 GEMINI_MODEL_IMPORTANT=gemini-3.0-flash
+DEBUG=false
 COLLECTOR_DRY_RUN=false
 COLLECTOR_CONCURRENCY=1
 COLLECTOR_MAX_ITEMS_PER_FEED=20
@@ -89,6 +90,7 @@ SUMMARY_CHUNK_CHARS=12000
 | `GEMINI_API_KEY` | collector 本番実行時は必須 | Gemini API キー | Secret としてサーバー上の `.env` のみに保存 |
 | `GEMINI_MODEL_DEFAULT` | 任意 | 通常記事の要約モデル | `gemini-3.1-flash-lite` |
 | `GEMINI_MODEL_IMPORTANT` | 任意 | 重要記事向けモデル | `gemini-3.0-flash` |
+| `DEBUG` | 任意 | `true` ならDB書き込みを必ずロールバックし、RSS・本文取得・LLMなどの外部通信を行わない | 通常は `false` |
 | `COLLECTOR_DRY_RUN` | 必須 | `true` ならネットワーク/LLM/DB書き込みなし | 本番は `false` |
 | `COLLECTOR_CONCURRENCY` | 任意 | 記事処理の並列数 | 無料枠重視なら `1` |
 | `COLLECTOR_MAX_ITEMS_PER_FEED` | 任意 | 1 feed あたりの最大取得件数 | 初期運用は `20` 以下 |

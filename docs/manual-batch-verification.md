@@ -59,7 +59,24 @@ pnpm dev:collector
 
 停止は `Ctrl+C` です。
 
-## 5. 実取得を小さく実行する
+## 5. DEBUG モードでロールバックと外部通信スキップを確認する
+
+`DEBUG=true` は `COLLECTOR_DRY_RUN` より優先される。DB の開始・完了処理はトランザクションで実行されるが、完了時に必ずロールバックされる。RSS、記事本文、Gemini を含む外部通信は行わないため、`GEMINI_API_KEY` は不要である。
+
+```bash
+set -a
+source .env
+set +a
+DEBUG=true pnpm --filter @upto/collector exec tsx src/index.ts
+```
+
+期待結果:
+
+- `debug: true` と `debug_external_requests_skipped` のログが出る
+- RSS/記事サイト/Gemini への通信は発生しない
+- 実行前後で `sources`、`feed_endpoints`、`crawl_jobs`、`articles` の行数が増えない
+
+## 6. 実取得を小さく実行する
 
 まず1 feed あたり1件、並列数1で実行します。
 
@@ -77,7 +94,7 @@ COLLECTOR_DRY_RUN=false COLLECTOR_MAX_ITEMS_PER_FEED=1 COLLECTOR_CONCURRENCY=1 p
 - 単一記事の失敗があっても、他の記事やfeed処理は継続する
 - Gemini APIキーが正しければ `article_summaries` に要約が保存される
 
-## 6. DB保存結果を確認する
+## 7. DB保存結果を確認する
 
 ```bash
 docker compose exec postgres psql -U upto -d upto
@@ -126,7 +143,7 @@ psql終了:
 \q
 ```
 
-## 7. idempotencyを確認する
+## 8. idempotencyを確認する
 
 同じ条件でもう一度実行します。
 
@@ -153,7 +170,7 @@ docker compose exec postgres psql -U upto -d upto -c "select normalized_url, cou
 
 - 結果が0件
 
-## 8. 標準検証を実行する
+## 9. 標準検証を実行する
 
 ```bash
 pnpm verify
@@ -163,7 +180,7 @@ pnpm verify
 
 - format、lint、typecheck、unit test がすべて成功する
 
-## 9. 後片付け
+## 10. 後片付け
 
 PostgreSQLを残す場合:
 
