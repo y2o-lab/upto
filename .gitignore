@@ -19,6 +19,7 @@ dist/
 build/
 coverage/
 storybook-static/
+.trigger/
 
 # Test outputs
 test-results/

@@ -1,353 +1,340 @@
-# サーバーデプロイ手順書
+# サーバーデプロイ・運用手順書
 
-作成日: 2026-06-08
+更新日: 2026-06-20
 
-この手順書は、Ubuntu Server 上で Upto の PostgreSQL と collector batch を運用し、必要に応じて Web を同じサーバーまたは Vercel で公開するための手順をまとめる。
-
-現時点のリポジトリには `postgres` と `collector` の Docker Compose service がある。Web 用の Dockerfile / Compose service はまだないため、Web を同一サーバーで動かす場合は Node.js + systemd で起動する。
+この手順書は、ADR-0004に従い、Upto collectorをオンプレのCoolifyからセルフホスト版Trigger.devへデプロイし、Trigger.devでschedule、ログ、実行履歴、再実行を管理するための手順をまとめる。
 
 ## 対象構成
 
-- OS: Ubuntu Server
-- Runtime: Node.js 24 LTS
-- Package manager: pnpm 10.8.1 以上
-- Database: PostgreSQL 17
-- Batch: Docker Compose + systemd timer
-- Web: Vercel、または Ubuntu Server 上の Node.js + systemd
+- Source: GitHub repositoryの保護されたproduction branch
+- Deploy control: CoolifyのGitHub webhook / Auto Deploy
+- Task build: Coolify deploy resourceから接続する専用remote Docker/BuildKit executor
+- Task registry/runtime: セルフホスト版Trigger.devのregistry、supervisor、runner
+- Application DB: Upto用PostgreSQL
+- AI: Gemini API
 
-## 前提
+Trigger.dev本体のwebapp、Redis、内部PostgreSQL、object storage、registry、supervisorはこのリポジトリでは管理しない。
 
-サーバーに以下を用意する。
+## 実行モデル
 
-- `git`
-- Docker Engine
-- Docker Compose plugin
-- Node.js 24 LTS
-- pnpm
+Coolify上でcollector processを常駐させたり、Trigger.devが既存collector containerを外部起動したりはしない。
 
-例:
+1. GitHub pushをCoolifyが受信する。
+2. Coolifyが`apps/collector/Dockerfile.trigger-deploy`をbuildする。
+3. 新しいdeploy resource containerでpost-deployment commandを1回実行する。
+4. `trigger.dev deploy`がtask imageを専用build executorでbuildし、Trigger.dev registryへpushする。
+5. Trigger.devがdeployment versionを登録する。
+6. Trigger.dev supervisor / runnerがscheduleまたは手動操作に応じてtask imageを実行する。
 
-```bash
-node --version
-pnpm --version
-docker --version
-docker compose version
-```
+`apps/collector/Dockerfile`はローカル・障害調査用のcollector直接実行imageとして残す。Trigger.devのdeployment imageはCLIが生成するため、このDockerfileを本番task runtimeとしてCoolifyに常駐させない。
 
-## ディレクトリ配置
+## 必須条件
 
-例として `/opt/upto` に配置する。
+### Trigger.dev
 
-```bash
-sudo mkdir -p /opt/upto
-sudo chown "$USER":"$USER" /opt/upto
-git clone git@github.com:Inoue416/upto.git /opt/upto
-cd /opt/upto
-```
+- self-hosted Trigger.dev v4.4.6、またはCLI/SDK 4.4.6との互換性を確認済みのversion
+- productionとstagingのproject environment
+- HTTPSで到達可能なAPI URL
+- non-interactive deploy用のaccess token
+- workerからpull可能な認証付きregistry
 
-既存配置を更新する場合:
+Trigger.dev本体、rootの`trigger.dev` package、`@trigger.dev/sdk`は同じversion系列へ固定する。本体を更新する場合はpackageとlockfileも同じ変更で更新し、staging deploy後にproductionへ反映する。
 
-```bash
-cd /opt/upto
-git fetch origin
-git switch codex-web-app
-git pull --ff-only origin codex-web-app
-```
+### 専用build executor
 
-本番運用ブランチが別に決まっている場合は、そのブランチ名に置き換える。
+- Docker Buildx対応
+- Coolify deploy resourceからTLS相互認証付き`tcp://`で接続可能
+- Trigger.dev registryへpush可能
+- Upto以外のproduction workloadを実行しない分離されたhostまたはVM
+
+`/var/run/docker.sock`をCoolify deploy containerへmountしない。deploy scriptは`unix://`接続とTLSなしのremote Docker接続を拒否する。
+
+### Network
+
+Trigger.dev runnerから以下へ接続できることを確認する。
+
+- Upto用PostgreSQL
+- RSS/API配信元
+- 記事配信元のHTTPS endpoint
+- Gemini API
+- Trigger.dev registryとobject storage
+
+`DATABASE_URL`のhostnameはTrigger.dev runnerから到達できる名前を使う。`localhost`やローカルDocker Compose専用の`postgres` service名をそのまま使わない。
 
 ## 環境変数
 
-`.env` はサーバー上にだけ作成し、Git にコミットしない。
+### Trigger.dev task runtime
 
-Docker Compose 内の collector から Compose の `postgres` service に接続する場合、`DATABASE_URL` のホスト名は `localhost` ではなく `postgres` にする。
+Trigger.dev dashboardのProject Settings > Environment Variablesでstaging / productionごとに設定する。
 
-```bash
-cd /opt/upto
-cp .env.example .env
-chmod 600 .env
-```
-
-本番例:
-
-```env
-DATABASE_URL=postgres://upto:upto@postgres:5432/upto
-GEMINI_API_KEY=replace-with-production-key
-GEMINI_MODEL_DEFAULT=gemini-3.1-flash-lite
-GEMINI_MODEL_IMPORTANT=gemini-3.0-flash
-COLLECTOR_DRY_RUN=false
-COLLECTOR_CONCURRENCY=1
-COLLECTOR_MAX_ITEMS_PER_FEED=20
-SUMMARY_CHUNK_CHARS=12000
-```
-
-### env一覧
-
-| 変数 | 必須 | 用途 | 本番の目安 |
+| 変数 | secret | 用途 | 初期値の目安 |
 |---|---:|---|---|
-| `DATABASE_URL` | 必須 | Web と collector が接続する PostgreSQL URL | Docker Compose 内は `postgres://upto:upto@postgres:5432/upto` |
-| `GEMINI_API_KEY` | collector 本番実行時は必須 | Gemini API キー | Secret としてサーバー上の `.env` のみに保存 |
-| `GEMINI_MODEL_DEFAULT` | 任意 | 通常記事の要約モデル | `gemini-3.1-flash-lite` |
-| `GEMINI_MODEL_IMPORTANT` | 任意 | 重要記事向けモデル | `gemini-3.0-flash` |
-| `COLLECTOR_DRY_RUN` | 必須 | `true` ならネットワーク/LLM/DB書き込みなし | 本番は `false` |
-| `COLLECTOR_CONCURRENCY` | 任意 | 記事処理の並列数 | 無料枠重視なら `1` |
-| `COLLECTOR_MAX_ITEMS_PER_FEED` | 任意 | 1 feed あたりの最大取得件数 | 初期運用は `20` 以下 |
-| `SUMMARY_CHUNK_CHARS` | 任意 | 要約時の本文チャンク文字数 | `12000` |
-| `UPTO_WEB_USE_FIXTURE_DATA` | 本番では不要 | Web のPlaywright/fixture検証用 | 本番では設定しない |
+| `DATABASE_URL` | Yes | Upto PostgreSQL接続 | runnerから到達可能なURL |
+| `DATABASE_POOL_MAX` | No | taskごとのDB Pool上限 | `2` |
+| `GEMINI_API_KEY` | Yes | Gemini API認証 | production key |
+| `GEMINI_MODEL_DEFAULT` | No | 通常記事モデル | `gemini-3.1-flash-lite` |
+| `GEMINI_MODEL_IMPORTANT` | No | 重要記事モデル | `gemini-3.0-flash` |
+| `COLLECTOR_DRY_RUN` | No | 副作用なし実行 | staging初回は`true`、productionは`false` |
+| `COLLECTOR_CONCURRENCY` | No | 記事処理並列数 | 初期は`1` |
+| `COLLECTOR_MAX_ITEMS_PER_FEED` | No | feedごとの最大件数 | staging初回は`1`、productionは`20`以下 |
+| `SUMMARY_CHUNK_CHARS` | No | 要約chunk文字数 | `12000` |
 
-`GEMINI_MODEL_*` を変更する場合は、実行前に対象モデルが使用中の Gemini API で有効であることを確認する。
+secret作成時はTrigger.devのSecret指定を有効にする。DB URL、API key、記事本文、LLM生レスポンスをtask logへ出さない。
 
-## PostgreSQL 起動
+### Coolify deploy resource
+
+staging / production resourceごとに設定する。
+
+| 変数 | secret | 用途 |
+|---|---:|---|
+| `TRIGGER_API_URL` | No | self-hosted Trigger.dev API URL |
+| `TRIGGER_ACCESS_TOKEN` | Yes | non-interactive deploy認証 |
+| `TRIGGER_PROJECT_REF` | No | Trigger.dev project ref |
+| `TRIGGER_DEPLOY_ENV` | No | `staging`または`prod` |
+| `TRIGGER_REGISTRY_HOST` | No | deployment image registry |
+| `TRIGGER_REGISTRY_USERNAME` | Yes | registry login user |
+| `TRIGGER_REGISTRY_PASSWORD` | Yes | registry login password |
+| `DOCKER_HOST` | No | 専用executorの`tcp://host:port` |
+| `DOCKER_TLS_VERIFY` | No | 必ず`1` |
+| `DOCKER_CERT_PATH` | No | client certificate mount path |
+
+Coolifyのpersistent storageまたはsecret file機能で、`DOCKER_CERT_PATH`に`ca.pem`、`cert.pem`、`key.pem`をread-only mountする。certificateやtokenをGit、Docker build argument、image layerへ含めない。
+
+`TRIGGER_WORKER_TOKEN`はTrigger.dev supervisor専用、`TRIGGER_SECRET_KEY`は外部アプリからtaskを起動する場合のAPI keyである。collector deploy resourceやscheduled taskには設定しない。
+
+## Repository verification
+
+dependency install後、変更をproduction branchへmergeする前に実行する。
 
 ```bash
-cd /opt/upto
-docker compose up -d postgres
-docker compose ps
+pnpm format:check
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm -r build
+sh -n apps/collector/scripts/deploy-trigger.sh
+docker build -f apps/collector/Dockerfile.trigger-deploy .
 ```
 
-期待結果:
+Trigger.dev接続情報を安全に設定できる環境では、追加でbuild artifactを確認する。
 
-- `upto-postgres-1` が `healthy` になる
-- `postgres-data` volume が作成される
+```bash
+pnpm trigger:deploy:dry-run
+```
+
+## Coolify resource設定
+
+stagingとproductionを別resourceにする。これによりtoken、environment、deployment履歴、手動承認を分離する。
+
+共通設定:
+
+| 項目 | 値 |
+|---|---|
+| Source | GitHub Appまたは認証済みGitHub repository |
+| Base directory | `/` |
+| Build pack | Dockerfile |
+| Dockerfile | `/apps/collector/Dockerfile.trigger-deploy` |
+| Domain / exposed port | なし |
+| Health check | 無効 |
+| Rolling update | 無効 |
+| Post-deployment command | `/app/apps/collector/scripts/deploy-trigger.sh` |
+| Auto Deploy | production branchで有効 |
+
+deploy resource containerの`CMD`は`node` userで`sleep infinity`を実行する。collector taskはこのcontainer内では動かない。post-deployment commandだけが専用executorを利用する。
+
+GitHub側では次を設定する。
+
+1. CoolifyのAuto Deployを有効にする。
+2. webhookを手動作成する場合はrandomなsecretを設定する。
+3. SSL verificationを有効にする。
+4. push eventだけを購読する。
+5. production branchを保護し、`pnpm verify`をrequired checkにする。
+6. 直接pushを禁止し、required checkに成功したPRだけをmergeする。
+
+可能ならwatch pathを以下へ限定する。
+
+```text
+apps/collector/**
+packages/db/**
+packages/domain/**
+package.json
+pnpm-lock.yaml
+pnpm-workspace.yaml
+trigger.config.ts
+.dockerignore
+```
+
+## 初回deploy
+
+### 1. Version確認
+
+Trigger.dev本体の固定image tagとpackage versionを比較する。
+
+```bash
+pnpm exec trigger --version
+```
+
+差異がある場合はdeployせず、互換versionへpackageを揃える。
+
+### 2. staging
+
+1. Trigger.dev staging environmentで`COLLECTOR_DRY_RUN=true`を設定する。
+2. Coolify staging resourceでmanual deployする。
+3. Coolify logでsource commit、dry-run build、staging deployment成功を確認する。
+4. Trigger.dev dashboardで`collect-news`とdeployment versionを確認する。
+5. dashboardからtaskを手動実行し、dry-run結果を確認する。
+6. task environmentを`COLLECTOR_DRY_RUN=false`、件数`1`、並列`1`へ変更する。
+7. 再度手動実行し、Upto DBへの保存と冪等性を確認する。
+
+### 3. production
+
+1. staging検証に使用したGit commitをproduction branchへ反映する。
+2. Trigger.dev production environmentへruntime変数を設定する。
+3. Coolify production resourceをmanual deployする。
+4. Trigger.dev dashboardでcurrent deploymentとGit source commitを照合する。
+5. scheduleを作成する前に件数`1`で手動実行する。
+6. DB保存、Gemini使用量、task result、worker CPU/RAM/diskを確認する。
+
+## Schedule設定
+
+task idは`collect-news`である。scheduleはコードへ埋め込まず、Trigger.dev dashboardで管理する。
+
+1. Schedules > New scheduleを開く。
+2. Taskに`collect-news`を選ぶ。
+3. cron patternを運用要件に合わせて入力する。
+4. Timezoneに`Asia/Tokyo`を明示する。
+5. production environmentだけを有効にする。
+6. 次回実行時刻を確認する。
+
+task queueのconcurrency limitはコードで`1`に固定している。schedule、手動run、retryが重なった場合、後続runはqueueで待機する。
+
+## ログ・履歴・再実行
+
+Trigger.dev dashboardのRunsから以下を確認する。
+
+- run id、attempt number、deployment version
+- 開始・終了、duration
+- article / feed / failure count
+- feed job id
+- partial failure warning
+- fatal failureと最大2 attemptのretry
+
+記事単位または一部feedの失敗はwarningとして完了し、DBのerror summaryを確認する。設定不備、DB接続不能、全feed取得不能など実行全体が成立しない場合はrun failureとなる。
+
+再実行はRunsから対象runを選択してReplay / Reattemptする。再実行後は同一`normalized_url`の重複がなく、要約済み記事で不要なGemini呼出しがないことを確認する。
 
 ## DB migration
 
-collector image には workspace が含まれるため、Compose 経由で migration を実行できる。
+Trigger.dev taskのdeployとDB migrationは分離する。schema変更があるreleaseでは、task deploymentの前にbackupを取得し、承認済みの運用環境からmigrationを1回だけ実行する。
+
+SupabaseへWebとcollectorの両方を接続する初回設定と受入確認は、[Supabase接続デプロイ手順書](supabase-deployment-runbook.md)に従う。
+
+Supabaseを利用する場合、Trigger.dev runtimeの`DATABASE_URL`にはDirect connectionを使用する。runnerがIPv4のみの場合はShared PoolerのSession modeを使用する。migrationにはpooler URLを流用せず、`DIRECT_DATABASE_URL`へDirect connectionを設定する。
 
 ```bash
-cd /opt/upto
-docker compose --profile batch build collector
-docker compose --profile batch run --rm collector pnpm --filter @upto/db db:migrate
+export DIRECT_DATABASE_URL='<Supabase Direct connection URL>'
+pnpm --filter @upto/db db:migrate
 ```
 
-期待結果:
+task image起動時にmigrationを自動実行しない。複数runによる同時migrationを避け、失敗時にtask deploymentとDB状態を個別に判断できるようにする。
 
-- Drizzle migration が成功する
-- `sources`、`articles`、`article_summaries`、`article_metrics`、`crawl_jobs` などが作成される
+## 旧systemd timerの停止
 
-## Collector の手動実行
-
-初回は件数を絞って実行する。
+既存サーバーに旧timerがある場合、production scheduleを有効化する前に手動で停止する。
 
 ```bash
-cd /opt/upto
-docker compose --profile batch run --rm \
-  -e COLLECTOR_MAX_ITEMS_PER_FEED=1 \
-  -e COLLECTOR_CONCURRENCY=1 \
-  collector
-```
-
-期待結果:
-
-- feed ごとに `started` / `finished` の JSON ログが出る
-- 成功記事は `articles.summary_status = summarized` になる
-- 既に `summary_status = summarized` の同一 `normalized_url` は `article_skipped_duplicate` として Gemini を呼ばずにスキップされる
-
-DB確認:
-
-```bash
-docker compose exec postgres psql -U upto -d upto -c "select status, count(*) from crawl_jobs group by status order by status;"
-docker compose exec postgres psql -U upto -d upto -c "select title, summary_status, published_at from articles order by created_at desc limit 10;"
-docker compose exec postgres psql -U upto -d upto -c "select normalized_url, count(*) from articles group by normalized_url having count(*) > 1;"
-```
-
-最後のSQLは0件であることを確認する。
-
-## Collector の定期実行
-
-systemd timer で Docker Compose の collector を定期実行する。
-
-`/etc/systemd/system/upto-collector.service`:
-
-```ini
-[Unit]
-Description=Upto collector batch
-Requires=docker.service
-After=docker.service network-online.target
-
-[Service]
-Type=oneshot
-WorkingDirectory=/opt/upto
-ExecStart=/usr/bin/docker compose --profile batch run --rm collector
-```
-
-`/etc/systemd/system/upto-collector.timer`:
-
-```ini
-[Unit]
-Description=Run Upto collector batch periodically
-
-[Timer]
-OnBootSec=5min
-OnUnitActiveSec=30min
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-```
-
-反映:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now upto-collector.timer
+sudo systemctl disable --now upto-collector.timer
 systemctl list-timers upto-collector.timer
 ```
 
-手動起動:
+service unitは監査用に一時保持してよいが、起動しない。Trigger.devの初回production schedule成功後、不要なunit fileを運用者が削除する。
 
-```bash
-sudo systemctl start upto-collector.service
-```
+## Rollback
 
-ログ確認:
+1. Trigger.dev dashboardで`collect-news`のqueueをpauseし、scheduleをdeactivateする。
+2. 実行中runは外部書込みの途中である可能性があるため、原則として完了を待つ。
+3. Trigger.devで直前の正常なdeployment versionをcurrentへpromoteする。
+4. environment変更が原因なら以前の値へ戻す。secret値を作業logへ記録しない。
+5. 件数`1`で手動実行し、DBとlogを確認する。
+6. 正常化後にqueueとscheduleを再開する。
 
-```bash
-journalctl -u upto-collector.service -n 200 --no-pager
-journalctl -u upto-collector.service -f
-```
+Coolifyのapplication rollbackだけではTrigger.devのcurrent deploymentは戻らない。Coolifyのsource commitとTrigger.dev task versionを別々に確認する。
 
-## Web を同一サーバーで起動する場合
+DB migrationを戻す自動手順はない。破壊的migrationは事前にforward-compatibleな移行・復旧手順を別途作成する。
 
-現時点では Web 用 Docker service は未作成のため、Node.js + systemd で動かす。
+## Secret rotation
 
-サーバー上の Node プロセスから Compose の PostgreSQL に接続する場合、公開ポート経由で `localhost` を使う。
+- Gemini / DB secret: Trigger.dev environmentで更新後、件数`1`の手動runを行う。
+- Trigger access token: Coolify resourceで更新後、staging deployを行う。
+- Registry credential: registry、Coolify、Trigger.dev workerの順序を計画し、pushとpullを両方検証する。
+- Docker TLS certificate: 専用executorとCoolify mountを更新し、`docker version`成功後にdeployする。
 
-Web 用の環境変数例:
+rotation中も古い値と新しい値をlogへ出さない。
 
-```env
-DATABASE_URL=postgres://upto:upto@localhost:5432/upto
-```
+## 監視・バックアップ
 
-ビルド:
+最低限、以下を監視する。
 
-```bash
-cd /opt/upto
-pnpm install --frozen-lockfile
-pnpm --filter @upto/web build
-```
+- Trigger.dev webapp / supervisor / runnerの死活
+- schedule欠落、queue滞留、連続run failure
+- worker CPU、RAM、disk
+- registry容量と古いdeployment image cleanup
+- Trigger.dev内部PostgreSQL、Redis、object storageの永続volume
+- Upto PostgreSQLのbackupと復元確認
+- Gemini rate limitと利用量
 
-systemd service 例:
+Trigger.dev self-hosted環境にはmanaged auto-scaling、warm start、checkpointがないため、worker resourceと可用性は運用側で管理する。
 
-`/etc/systemd/system/upto-web.service`:
+## Web deployment
 
-```ini
-[Unit]
-Description=Upto web app
-After=network-online.target docker.service
-Requires=docker.service
-
-[Service]
-Type=simple
-WorkingDirectory=/opt/upto
-EnvironmentFile=/opt/upto/.env.web
-Environment=NODE_ENV=production
-ExecStart=/usr/bin/pnpm --filter @upto/web start
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-`.env.web`:
-
-```env
-DATABASE_URL=postgres://upto:upto@localhost:5432/upto
-```
-
-起動:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now upto-web.service
-sudo systemctl status upto-web.service
-```
-
-ログ:
-
-```bash
-journalctl -u upto-web.service -n 200 --no-pager
-```
-
-外部公開する場合は Caddy や nginx で `localhost:3000` へ reverse proxy する。
-
-### Web エラー調査
-
-初期表示や `/api/articles` が失敗した場合、画面と公開APIレスポンスには固定の短いエラーだけを出す。DB URL、stack trace、Next.js digest、内部例外 message はユーザー画面や公開APIレスポンスに出さない。
-
-調査時は Web の標準出力と reverse proxy のログを確認する。
-
-```bash
-journalctl -u upto-web.service -n 200 --no-pager
-journalctl -u upto-web.service -f
-```
-
-確認ポイント:
-
-- `Failed to fetch article page`: `/api/articles` の内部エラー。`DATABASE_URL`、PostgreSQL の稼働状態、migration 状態を確認する。
-- `Failed to render the article feed`: 初期表示の Server Component 取得または描画時の失敗。周辺ログに DB 接続や記事取得の例外がないか確認する。
-- 400 の `invalid_cursor` / `invalid_snapshot`: client から渡された cursor または snapshotAt が不正。通常は再読み込みで復旧する。
-
-## Web を Vercel で公開する場合
-
-Vercel 側に少なくとも以下を設定する。
-
-```env
-DATABASE_URL=postgres://...
-```
-
-本番データを表示するため、`UPTO_WEB_USE_FIXTURE_DATA=true` は設定しない。
-
-DB がオンプレサーバー上の PostgreSQL の場合、Vercel から接続できるネットワーク設計、TLS、IP制限、バックアップ方針を別途決める。運用負荷を下げる場合は Supabase Postgres などの外部PostgreSQLを使う。
-
-## 更新デプロイ手順
-
-```bash
-cd /opt/upto
-git fetch origin
-git pull --ff-only
-docker compose --profile batch build collector
-docker compose --profile batch run --rm collector pnpm --filter @upto/db db:migrate
-sudo systemctl restart upto-web.service
-```
-
-collector は timer の次回実行から新しい image を使う。即時実行したい場合:
-
-```bash
-sudo systemctl start upto-collector.service
-```
-
-## ロールバック
-
-直前のコミットへ戻す例:
-
-```bash
-cd /opt/upto
-git log --oneline -5
-git switch --detach <rollback_commit>
-docker compose --profile batch build collector
-sudo systemctl restart upto-web.service
-```
-
-DB migration を戻す手順は現在用意していない。破壊的 migration を入れる場合は、事前にバックアップと復旧手順を作成する。
-
-## バックアップ
-
-PostgreSQL volume を消すとデータが失われる。定期的に dump を取得する。
-
-```bash
-mkdir -p /opt/upto/backups
-docker compose exec -T postgres pg_dump -U upto -d upto > /opt/upto/backups/upto-$(date +%Y%m%d-%H%M%S).sql
-```
-
-復元は既存DBを上書きする可能性があるため、実行前に対象DBと dump 内容を確認する。
+WebはVercelまたは既存のオンプレ構成を継続する。Vercelでは`DATABASE_URL`にSupabase Transaction pooler（port 6543）を設定し、`DATABASE_POOL_MAX=2`から開始する。Web runtimeとTrigger.dev runnerでは推奨される接続方式が異なるため、同じSupabase DBを利用してもURLを流用しない。
 
 ## トラブルシュート
 
-- `DATABASE_URL is required`: `.env` または `.env.web` に `DATABASE_URL` がない。
-- collector からDB接続できない: Docker Compose 内では `DATABASE_URL` のホスト名が `postgres` になっているか確認する。
-- Web からDB接続できない: host 上の Web では `localhost:5432`、Compose 内の collector では `postgres:5432` を使い分ける。
-- Gemini で失敗する: `GEMINI_API_KEY`、`GEMINI_MODEL_DEFAULT`、`GEMINI_MODEL_IMPORTANT` を確認する。
-- 同じ記事が再要約される: `articles.normalized_url` に既存行があり、`summary_status = summarized` になっているか確認する。
-- `docker compose down -v` は `postgres-data` volume を削除する。本番では実行しない。
+### Taskがdashboardに表示されない
+
+- Coolify post-deployment commandの終了codeを確認する。
+- `TRIGGER_API_URL`、`TRIGGER_ACCESS_TOKEN`、`TRIGGER_PROJECT_REF`を確認する。
+- Trigger.dev本体とCLI/SDKのversionを確認する。
+- `trigger.config.ts`のtask directoryを確認する。
+
+### Buildまたはpushに失敗する
+
+- `DOCKER_HOST`が専用executorの`tcp://` URLか確認する。
+- `DOCKER_TLS_VERIFY=1`とclient certificate mountを確認する。
+- deploy resourceからregistryの名前解決とTLSを確認する。
+- registry credentialを確認する。credential値はlogへ貼らない。
+- executorのdisk空き容量とBuildxを確認する。
+
+### Runnerがtask imageをpullできない
+
+- supervisor側のregistry URL、credential、CAを確認する。
+- deploy実行機とworkerで同じregistry namespaceを参照しているか確認する。
+- deployment versionをpromote済みか確認する。
+
+### DB接続に失敗する
+
+- Trigger.dev runnerから見たhostname、port、TLS、firewallを確認する。
+- `localhost`やCompose専用service名になっていないか確認する。
+- migration適用状態を確認する。
+
+### Runは成功だが失敗記事がある
+
+- resultの`failedCount`とwarning logを確認する。
+- `crawl_jobs.error_summary`と記事statusを確認する。
+- 単一記事失敗はbatch全体を停止しない仕様である。
+
+### Runが繰り返し実行される
+
+- Trigger.devのscheduleとrun retryを確認する。
+- 旧systemd timerが停止済みか確認する。
+- Coolify post-deployment commandはsource deploy時だけ実行され、collector自体を起動していないことを確認する。
+
+## 参照
+
+- [ADR-0004](adr/0004-batch-deployment-with-trigger-dev.md)
+- [Trigger.dev self-hosting with Docker](https://trigger.dev/docs/self-hosting/docker)
+- [Trigger.dev deployment](https://trigger.dev/docs/deployment/overview)
+- [Trigger.dev scheduled tasks](https://trigger.dev/docs/tasks/scheduled)
+- [Coolify Dockerfile build pack](https://coolify.io/docs/applications/build-packs/dockerfile)
+- [Coolify GitHub Auto Deploy](https://coolify.io/docs/applications/ci-cd/github/auto-deploy)

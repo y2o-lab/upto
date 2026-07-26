@@ -5,7 +5,7 @@ import type { CollectorConfig } from "./config.js";
 
 import { extractArticleContent } from "./content.js";
 import { feedEndpointUrl, fetchFeedItems, type FeedItem, type FeedTarget } from "./feeds.js";
-import { createPersistence, type Persistence } from "./persistence.js";
+import { createPersistence, type ManagedPersistence, type Persistence } from "./persistence.js";
 import { createGeminiSummarizer, type Summarizer } from "./summarizer.js";
 
 export type RunCollectorInput = {
@@ -15,6 +15,7 @@ export type RunCollectorInput = {
 };
 
 export type RunCollectorDependencies = {
+  createPersistence?: (databaseUrl: string) => ManagedPersistence;
   fetcher?: typeof fetch;
   logger?: (event: Record<string, unknown>) => void;
   persistence?: Persistence;
@@ -25,7 +26,9 @@ export type RunCollectorResult = {
   articleCount: number;
   dryRun: boolean;
   failedCount: number;
+  failedFeedCount: number;
   feedCount: number;
+  successfulFeedCount: number;
 };
 
 export async function runCollector(input: RunCollectorInput): Promise<RunCollectorResult> {
@@ -46,7 +49,9 @@ export async function runCollector(input: RunCollectorInput): Promise<RunCollect
       articleCount: 0,
       dryRun: true,
       failedCount: 0,
+      failedFeedCount: 0,
       feedCount: input.feeds.length,
+      successfulFeedCount: input.feeds.length,
     };
   }
 
@@ -58,102 +63,120 @@ export async function runCollector(input: RunCollectorInput): Promise<RunCollect
     throw new Error("GEMINI_API_KEY is required when COLLECTOR_DRY_RUN=false.");
   }
 
-  const persistence =
-    input.dependencies?.persistence ?? createPersistence(input.config.databaseUrl ?? "");
-  const summarizer =
-    input.dependencies?.summarizer ??
-    createGeminiSummarizer({
-      apiKey: input.config.geminiApiKey ?? "",
-      chunkSize: input.config.summaryChunkChars,
-      defaultModel: input.config.geminiModelDefault,
-      importantModel: input.config.geminiModelImportant,
-    });
-  const fetcher = input.dependencies?.fetcher ?? fetch;
-  const articleLimit = pLimit(input.config.concurrency);
+  const managedPersistence = input.dependencies?.persistence
+    ? null
+    : (input.dependencies?.createPersistence ?? createPersistence)(input.config.databaseUrl ?? "");
+  const persistence = input.dependencies?.persistence ?? managedPersistence;
+  if (!persistence) {
+    throw new Error("Failed to create collector persistence.");
+  }
 
-  let articleCount = 0;
-  let totalFailedCount = 0;
+  try {
+    const summarizer =
+      input.dependencies?.summarizer ??
+      createGeminiSummarizer({
+        apiKey: input.config.geminiApiKey ?? "",
+        chunkSize: input.config.summaryChunkChars,
+        defaultModel: input.config.geminiModelDefault,
+        importantModel: input.config.geminiModelImportant,
+      });
+    const fetcher = input.dependencies?.fetcher ?? fetch;
+    const articleLimit = pLimit(input.config.concurrency);
 
-  for (const feed of input.feeds) {
-    const job = await persistence.startFeedJob(feed);
-    let feedFetchedCount = 0;
-    let feedFailedCount = 0;
-    const feedErrors: string[] = [];
+    let articleCount = 0;
+    let failedFeedCount = 0;
+    let totalFailedCount = 0;
 
-    logger({
-      endpoint: feedEndpointUrl(feed),
-      feed: feed.name,
-      jobId: job.jobId,
-      status: "started",
-    });
+    for (const feed of input.feeds) {
+      const job = await persistence.startFeedJob(feed);
+      let feedFetchedCount = 0;
+      let feedFailedCount = 0;
+      let feedFetchFailed = false;
+      const feedErrors: string[] = [];
 
-    try {
-      const items = await fetchFeedItems(feed, input.config.maxItemsPerFeed, fetcher);
-      await Promise.all(
-        items.map((item) =>
-          articleLimit(async () => {
-            try {
-              const result = await processFeedItem({
-                feed,
-                fetcher,
-                item,
-                logger,
-                persistence,
-                sourceId: job.sourceId,
-                summarizer,
-              });
-              if (result === "processed") {
-                articleCount += 1;
-                feedFetchedCount += 1;
-              }
-            } catch (error) {
-              feedFailedCount += 1;
-              const errorMessage = error instanceof Error ? error.message : String(error);
-              feedErrors.push(`${item.url}: ${errorMessage}`);
-              await markItemFailedIfPossible(persistence, job.sourceId, item, error);
-              logger({
-                error: errorMessage,
-                feed: feed.name,
-                status: "article_failed",
-                url: item.url,
-              });
-            }
-          }),
-        ),
-      );
-    } catch (error) {
-      feedFailedCount += 1;
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      feedErrors.push(errorMessage);
       logger({
-        error: errorMessage,
+        endpoint: feedEndpointUrl(feed),
         feed: feed.name,
-        status: "feed_failed",
+        jobId: job.jobId,
+        status: "started",
+      });
+
+      try {
+        const items = await fetchFeedItems(feed, input.config.maxItemsPerFeed, fetcher);
+        await Promise.all(
+          items.map((item) =>
+            articleLimit(async () => {
+              try {
+                const result = await processFeedItem({
+                  feed,
+                  fetcher,
+                  item,
+                  logger,
+                  persistence,
+                  sourceId: job.sourceId,
+                  summarizer,
+                });
+                if (result === "processed") {
+                  articleCount += 1;
+                  feedFetchedCount += 1;
+                }
+              } catch (error) {
+                feedFailedCount += 1;
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                feedErrors.push(`${item.url}: ${errorMessage}`);
+                await markItemFailedIfPossible(persistence, job.sourceId, item, error);
+                logger({
+                  error: errorMessage,
+                  feed: feed.name,
+                  status: "article_failed",
+                  url: item.url,
+                });
+              }
+            }),
+          ),
+        );
+      } catch (error) {
+        feedFetchFailed = true;
+        feedFailedCount += 1;
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        feedErrors.push(errorMessage);
+        logger({
+          error: errorMessage,
+          feed: feed.name,
+          status: "feed_failed",
+        });
+      }
+
+      totalFailedCount += feedFailedCount;
+      if (feedFetchFailed) {
+        failedFeedCount += 1;
+      }
+      await persistence.finishFeedJob(job.jobId, {
+        errorSummary: feedErrors.length > 0 ? feedErrors.slice(0, 10).join("\n") : null,
+        failedCount: feedFailedCount,
+        fetchedCount: feedFetchedCount,
+      });
+
+      logger({
+        failedCount: feedFailedCount,
+        feed: feed.name,
+        fetchedCount: feedFetchedCount,
+        jobId: job.jobId,
+        status: feedFailedCount > 0 ? "finished_with_errors" : "finished",
       });
     }
 
-    totalFailedCount += feedFailedCount;
-    await persistence.finishFeedJob(job.jobId, {
-      errorSummary: feedErrors.length > 0 ? feedErrors.slice(0, 10).join("\n") : null,
-      failedCount: feedFailedCount,
-      fetchedCount: feedFetchedCount,
-    });
-
-    logger({
-      failedCount: feedFailedCount,
-      feed: feed.name,
-      fetchedCount: feedFetchedCount,
-      jobId: job.jobId,
-      status: feedFailedCount > 0 ? "finished_with_errors" : "finished",
-    });
+    return {
+      articleCount,
+      dryRun: false,
+      failedCount: totalFailedCount,
+      failedFeedCount,
+      feedCount: input.feeds.length,
+      successfulFeedCount: input.feeds.length - failedFeedCount,
+    };
+  } finally {
+    await managedPersistence?.close();
   }
-
-  return {
-    articleCount,
-    dryRun: false,
-    failedCount: totalFailedCount,
-    feedCount: input.feeds.length,
-  };
 }
 
 type ProcessFeedItemInput = {

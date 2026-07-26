@@ -5,6 +5,7 @@ import {
   articleMetrics,
   articles,
   articleSummaries,
+  closeDb,
   createDb,
   crawlJobs,
   eq,
@@ -48,6 +49,10 @@ export type Persistence = {
   updateArticleMetrics(input: UpdateArticleMetricsInput): Promise<void>;
 };
 
+export type ManagedPersistence = Persistence & {
+  close(): Promise<void>;
+};
+
 export type FinishFeedJobInput = {
   errorSummary: string | null;
   failedCount: number;
@@ -68,12 +73,16 @@ export type UpdateArticleMetricsInput = {
   views: number;
 };
 
-export function createPersistence(databaseUrl: string): Persistence {
+export function createPersistence(databaseUrl: string): ManagedPersistence {
   return new DbPersistence(createDb(databaseUrl));
 }
 
 class DbPersistence implements Persistence {
   constructor(private readonly db: DbClient) {}
+
+  async close(): Promise<void> {
+    await closeDb(this.db);
+  }
 
   async startFeedJob(feed: FeedTarget): Promise<FeedJob> {
     const sourceId = await this.findOrCreateSource(feed.name, feed.siteUrl);

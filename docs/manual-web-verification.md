@@ -39,6 +39,8 @@ docker compose ps
 - `.env` の `DATABASE_URL` が対象DBを指していることを確認する
 - 接続先DBにmigrationが適用済みであることを確認する
 
+Supabase本番検証では、Vercelの`DATABASE_URL`にTransaction pooler（port 6543）、`DATABASE_POOL_MAX=2`を設定する。migrationは同じURLを使わず、Direct connectionを`DIRECT_DATABASE_URL`へ設定して実行する。いずれの値も`NEXT_PUBLIC_`変数には設定しない。
+
 ## 3. 開発サーバーを起動する
 
 ```bash

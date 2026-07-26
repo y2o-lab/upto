@@ -4,9 +4,9 @@ import {
   articleMetrics,
   articles,
   articleSummaries,
-  createDb,
   desc,
   eq,
+  getDb,
   sources,
   sql,
 } from "@upto/db";
@@ -167,7 +167,7 @@ export async function getArticlesPage(
     return paginateRows(fixtureRows, { cursor, limit, snapshotAt });
   }
 
-  const db = createDb();
+  const db = getDb();
   const rows = await db
     .select({
       bookmarks: articleMetrics.bookmarks,
