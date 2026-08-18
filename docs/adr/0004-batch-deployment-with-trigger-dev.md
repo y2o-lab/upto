@@ -52,3 +52,4 @@ Coolify からバッチ本体をビルドできるように、pnpm workspace 内
 ## 追記
 
 - 2026-06-20: 初版作成。オンプレの Coolify とセルフホスト版 Trigger.dev によるバッチのデプロイ・実行管理を Accepted として記録。
+- 2026-08-08: Coolify webhook / deploy resource / remote Docker executor を経由する task deployment は ADR-0005 により置き換える。Trigger.dev に schedule、実行履歴、ログ、再実行を集約する決定は継続する。

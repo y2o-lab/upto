@@ -30,6 +30,8 @@ Direct endpointは標準ではIPv6である。Trigger.dev runnerまたはmigrati
 
 すべてのremote接続でTLSを使用する。Supabase Dashboardが表示する接続文字列を基準にし、`sslmode=disable`を指定しない。
 
+Direct connectionの証明書チェーンを実行環境のNode.jsが信頼できない場合、WebまたはTrigger.dev task runtimeにはSupabase Connect画面から取得したServer root certificateのPEM全文を`DATABASE_SSL_CA`としてSecret設定する。`@upto/db`はこの値をCAとして使い、接続先ホスト名も検証する。task runtimeの`DATABASE_URL`へ開発端末の`sslrootcert`ファイルパスを入れない。Drizzle migrationは`@upto/db`を経由しないため、migration実行環境では従来どおり`DIRECT_DATABASE_URL`の`sslrootcert`でローカルのCAファイルを指定する。
+
 ## 1. Supabase projectを準備する
 
 stagingとproductionは別projectにする。少なくとも次を確認する。
@@ -90,16 +92,17 @@ Trigger.dev Dashboardの対象projectで **Project Settings > Environment Variab
 
 1. runnerからSupabase Direct endpointへIPv6疎通できるか確認する。
 2. 疎通できる場合はDirect URL、IPv4のみならSession pooler URLを`DATABASE_URL`へ設定し、Secret指定を有効にする。
-3. `DATABASE_POOL_MAX=2`を設定する。
-4. 初回は`COLLECTOR_DRY_RUN=false`、`COLLECTOR_CONCURRENCY=1`、`COLLECTOR_MAX_ITEMS_PER_FEED=1`にする。
-5. `GEMINI_API_KEY`など、[既定のtask runtime変数](server-deployment-runbook.md#triggerdev-task-runtime)も設定する。
-6. Coolifyからcollectorの対象commitをデプロイする。
-7. Trigger.dev Dashboardで`collect-news`を手動実行する。
-8. runが成功し、Supabase上の`crawl_jobs`、`articles`、`article_summaries`へ結果が保存されたことを確認する。
-9. 同じ条件でもう一度実行し、`normalized_url`単位で重複が作られないことを確認する。
-10. 検証後に件数と並列数を運用値へ戻し、production scheduleを有効にする。
+3. Direct connectionのCAがrunnerで信頼されない場合は、Supabase Server root certificateを`DATABASE_SSL_CA`としてSecret設定する。
+4. `DATABASE_POOL_MAX=2`を設定する。
+5. 初回は`COLLECTOR_DRY_RUN=false`、`COLLECTOR_CONCURRENCY=1`、`COLLECTOR_MAX_ITEMS_PER_FEED=1`にする。
+6. `GEMINI_API_KEY`など、[既定のtask runtime変数](server-deployment-runbook.md#triggerdev-task-runtime)も設定する。
+7. deploy hostでcollectorの対象commitをcheckoutし、CLI deployを実行する。
+8. Trigger.dev Dashboardで`collect-news`を手動実行する。
+9. runが成功し、Supabase上の`crawl_jobs`、`articles`、`article_summaries`へ結果が保存されたことを確認する。
+10. 同じ条件でもう一度実行し、`normalized_url`単位で重複が作られないことを確認する。
+11. 検証後に件数と並列数を運用値へ戻し、production scheduleを有効にする。
 
-`DATABASE_URL`はTrigger.dev task runtimeへ設定する。Coolifyのdeploy resourceへ設定しても、Trigger.dev runnerのtask runtimeには渡らない。反対に、`TRIGGER_ACCESS_TOKEN`やregistry credentialをtask runtimeへ設定しない。
+`DATABASE_URL`はTrigger.dev task runtimeへ設定する。deploy hostの`.env`へ設定しても、Trigger.dev runnerのtask runtimeには渡らない。反対に、`TRIGGER_ACCESS_TOKEN`やregistry credentialをtask runtimeへ設定しない。
 
 ## 5. production受入確認
 
@@ -147,4 +150,3 @@ application rollbackだけではDB migrationは元に戻さない。
 - [Supabase: Production Checklist](https://supabase.com/docs/guides/platform/going-into-prod/)
 - [Supabase: Database Backups](https://supabase.com/docs/guides/platform/backups)
 - [Vercel: Environment Variables](https://vercel.com/docs/projects/environment-variables)
-

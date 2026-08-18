@@ -23,7 +23,7 @@ sh -n apps/collector/scripts/deploy-trigger.sh
 - Trigger task adapterを含めてtypecheckできる。
 - deploy scriptのshell構文が正しい。
 
-## 2. Docker image検証
+## 2. Deploy hostのDocker検証
 
 collector直接実行用image:
 
@@ -32,21 +32,18 @@ docker build -f apps/collector/Dockerfile -t upto-collector:local .
 docker run --rm -e COLLECTOR_DRY_RUN=true upto-collector:local
 ```
 
-Coolify deploy resource用image:
-
 ```bash
-docker build -f apps/collector/Dockerfile.trigger-deploy -t upto-trigger-deployer:local .
-docker run --rm --entrypoint sh upto-trigger-deployer:local -c \
-  'docker --version && docker buildx version && pnpm exec trigger --version'
+docker version
+docker buildx version
+pnpm exec trigger --version
 ```
 
 期待結果:
 
 - 直接実行imageはdry-run JSONを出して終了する。
-- deploy imageにDocker CLI、Buildx、固定versionのTrigger.dev CLIがある。
-- image historyやbuild logにsecretがない。
+- deploy hostのDocker CLI、Buildx、固定versionのTrigger.dev CLIが利用できる。
 
-host Docker socketをcontainerへmountしない。
+deploy scriptはdeploy host上で実行する。Docker socketをCoolify containerへmountしない。
 
 ## 3. Deploy script guard検証
 
@@ -61,7 +58,7 @@ env -i PATH=/usr/bin:/bin sh apps/collector/scripts/deploy-trigger.sh
 - `TRIGGER_API_URL`不足を示して終了する。
 - secret値は出力しない。
 
-`DOCKER_HOST=unix:///var/run/docker.sock`を与えた場合もdeploy前に拒否されることを確認する。実在tokenやpasswordはこのguard検証に使わない。
+deploy scriptに古い`DOCKER_HOST`、`DOCKER_TLS_VERIFY`、`DOCKER_CERT_PATH`が残っていても、local Docker daemonを使うために解除される。実在tokenやpasswordはguard検証に使わない。
 
 ## 4. ローカルdry-run
 
@@ -74,7 +71,7 @@ pnpm dev:collector
 - `dryRun: true`のlogが出る。
 - network、Gemini、DB writeを行わない。
 
-## 5. ローカル実取得
+## 5. ローカルDBへmigrationを適用する
 
 ローカルPostgreSQLへmigrationを適用する。
 
@@ -90,6 +87,25 @@ DIRECT_DATABASE_URL='<Supabase Direct connection URL>' pnpm db:migrate
 ```
 
 URLとpasswordはshell historyやログへ残さないこと。上記は変数の用途を示す例であり、実運用では承認済みsecret storeから注入する。
+
+## 6. DEBUG モードでロールバックと外部通信スキップを確認する
+
+`DEBUG=true` は `COLLECTOR_DRY_RUN` より優先される。DB の開始・完了処理はトランザクションで実行されるが、完了時に必ずロールバックされる。RSS、記事本文、Gemini を含む外部通信は行わないため、`GEMINI_API_KEY` は不要である。
+
+```bash
+set -a
+source .env
+set +a
+DEBUG=true pnpm --filter @upto/collector exec tsx src/index.ts
+```
+
+期待結果:
+
+- `debug: true` と `debug_external_requests_skipped` のログが出る
+- RSS/記事サイト/Gemini への通信は発生しない
+- 実行前後で `sources`、`feed_endpoints`、`crawl_jobs`、`articles` の行数が増えない
+
+## 7. 実取得を小さく実行する
 
 `.env`をshellへ読み込み、件数と並列数を絞って実行する。
 
@@ -110,7 +126,7 @@ pnpm --filter @upto/collector exec tsx src/index.ts
 - 成功記事がDBへ保存される。
 - 全feed取得不能の場合はprocessがfailureで終了する。
 
-## 6. DB確認
+## 8. DB保存結果を確認する
 
 ```bash
 docker compose exec postgres psql -U upto -d upto
@@ -140,9 +156,9 @@ having count(*) > 1;
 
 最後のqueryは0件であることを確認する。
 
-## 7. ローカル冪等性
+## 9. ローカル冪等性
 
-手順5と同じ条件でもう一度実行する。
+手順7と同じ条件でもう一度実行する。
 
 期待結果:
 
@@ -151,7 +167,7 @@ having count(*) > 1;
 - metricsは最新値へ更新される。
 - `crawl_jobs`は実行ごとに記録される。
 
-## 8. Trigger.dev local development
+## 10. Trigger.dev local development
 
 Trigger.dev self-hosted instanceへのlocal profileまたは以下の非secret設定を準備する。
 
@@ -173,9 +189,9 @@ pnpm trigger:dev
 - queue concurrencyが1、最大attemptが2として表示される。
 - dashboardのTestからdry-runを起動できる。
 
-## 9. Trigger.dev deploy dry-run
+## 11. Trigger.dev deploy dry-run
 
-専用build executorとregistry認証を利用できる安全な環境で実行する。
+registry認証を設定済みのdeploy host上で実行する。
 
 ```bash
 pnpm trigger:deploy:dry-run
@@ -187,7 +203,7 @@ pnpm trigger:deploy:dry-run
 - `@upto/db`、`@upto/domain`、collectorの依存が解決される。
 - task runtime imageへ`.env`やsecretが含まれない。
 
-## 10. Trigger.dev staging手動実行
+## 12. Trigger.dev staging手動実行
 
 Trigger.dev staging environmentを次の小さい設定にする。
 
@@ -209,7 +225,7 @@ dashboardから`collect-news`を実行し、以下を確認する。
 - resultにarticle / feed / failure countがある。
 - DBへ記事とfeed jobが保存される。
 
-## 11. Staging再実行
+## 13. Staging再実行
 
 同じrunをReplay / Reattemptする。
 
@@ -219,7 +235,7 @@ dashboardから`collect-news`を実行し、以下を確認する。
 - 要約済み記事を不要に再要約しない。
 - 新しいrun履歴がdashboardに残る。
 
-## 12. Partial failure検証
+## 14. Partial failure検証
 
 test fixtureまたはstaging専用の制御可能なfeedで、1記事だけ失敗させる。
 
@@ -232,7 +248,7 @@ test fixtureまたはstaging専用の制御可能なfeedで、1記事だけ失�
 
 production feed URLやsecretを壊して検証しない。
 
-## 13. Fatal failureとretry検証
+## 15. Fatal failureとretry検証
 
 staging environmentだけで、一時的に到達不能なDB hostnameを設定する。実行後すぐ正しい値へ戻せるよう、元の値を安全なsecret managerで保持する。
 
@@ -245,7 +261,7 @@ staging environmentだけで、一時的に到達不能なDB hostnameを設定�
 
 検証後は正しいDB secretへ戻し、件数1で正常実行する。
 
-## 14. Schedule検証
+## 16. Schedule検証
 
 dashboardで一時scheduleを作成する。
 
@@ -262,9 +278,9 @@ dashboardで一時scheduleを作成する。
 
 確認後、一時scheduleを削除する。
 
-## 15. Production前チェック
+## 17. Production前チェック
 
-- stagingとproductionのCoolify resourceが分離されている。
+- stagingとproductionの`TRIGGER_DEPLOY_ENV`を取り違えず、同じ検証済みcommitを明示的にdeployする。
 - production branchはrequired checks付きで保護されている。
 - Trigger.dev、CLI、SDKのversionが互換で固定されている。
 - 旧systemd timerが停止している。

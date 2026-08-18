@@ -44,6 +44,7 @@ export type Persistence = {
   findArticleByNormalizedUrl(normalizedUrl: string): Promise<ExistingArticle | null>;
   finishFeedJob(jobId: string, result: FinishFeedJobInput): Promise<void>;
   markArticleFailed(input: MarkArticleFailedInput): Promise<void>;
+  runInRollbackTransaction?<T>(callback: (persistence: Persistence) => Promise<T>): Promise<T>;
   saveArticle(input: SaveArticleInput): Promise<string>;
   startFeedJob(feed: FeedTarget): Promise<FeedJob>;
   updateArticleMetrics(input: UpdateArticleMetricsInput): Promise<void>;
@@ -74,14 +75,45 @@ export type UpdateArticleMetricsInput = {
 };
 
 export function createPersistence(databaseUrl: string): ManagedPersistence {
-  return new DbPersistence(createDb(databaseUrl));
+  const db = createDb(databaseUrl);
+  return new DbPersistence(db, db.transaction.bind(db), db);
 }
 
-class DbPersistence implements Persistence {
-  constructor(private readonly db: DbClient) {}
+type DbExecutor = Pick<DbClient, "insert" | "select" | "update">;
+
+class DbPersistence implements ManagedPersistence {
+  constructor(
+    private readonly db: DbExecutor,
+    private readonly transaction?: DbClient["transaction"],
+    private readonly rootDb?: DbClient,
+  ) {}
+
+  async runInRollbackTransaction<T>(
+    callback: (persistence: Persistence) => Promise<T>,
+  ): Promise<T> {
+    if (!this.transaction) {
+      throw new Error("Rollback transactions can only be started from the root database client.");
+    }
+
+    try {
+      await this.transaction(async (transaction) => {
+        const result = await callback(new DbPersistence(transaction));
+        throw new DebugTransactionRollback(result);
+      });
+    } catch (error) {
+      if (error instanceof DebugTransactionRollback) {
+        return error.result as T;
+      }
+      throw error;
+    }
+
+    throw new Error("Debug transaction completed without rolling back.");
+  }
 
   async close(): Promise<void> {
-    await closeDb(this.db);
+    if (this.rootDb) {
+      await closeDb(this.rootDb);
+    }
   }
 
   async startFeedJob(feed: FeedTarget): Promise<FeedJob> {
@@ -324,6 +356,12 @@ class DbPersistence implements Persistence {
     }
 
     return endpoint.id;
+  }
+}
+
+class DebugTransactionRollback extends Error {
+  constructor(readonly result: unknown) {
+    super("Rollback collector debug transaction.");
   }
 }
 
