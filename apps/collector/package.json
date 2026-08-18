@@ -11,14 +11,14 @@
     "typecheck": "tsc -b tsconfig.json"
   },
   "dependencies": {
-    "@google/genai": "2.8.0",
+    "@google/genai": "2.17.1",
     "@mozilla/readability": "0.6.0",
-    "@trigger.dev/sdk": "4.4.6",
+    "@trigger.dev/sdk": "4.5.11",
     "@upto/db": "workspace:*",
     "@upto/domain": "workspace:*",
-    "fast-xml-parser": "5.8.0",
+    "fast-xml-parser": "5.10.1",
     "jsdom": "29.1.1",
-    "p-limit": "7.3.0",
+    "p-limit": "7.3.1",
     "zod": "4.4.3"
   },
   "devDependencies": {
