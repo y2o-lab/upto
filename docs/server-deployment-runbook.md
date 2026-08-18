@@ -38,7 +38,7 @@ GitHubへのmergeはdeploymentを自動実行しない。staging検証後、同�
 
 GHCRをregistryとして使う場合、Trigger.dev webappの`DEPLOY_REGISTRY_NAMESPACE`はDocker image repositoryの形式どおり小文字だけにする。GitHubアカウントの表示名に大文字が含まれていても、たとえば`Inoue416`ではなく`inoue416`を設定する。
 
-Trigger.dev本体、rootの`trigger.dev` package、`@trigger.dev/sdk`は同じversion系列へ固定する。本体を更新する場合はpackageとlockfileも同じ変更で更新し、staging deploy後にproductionへ反映する。
+Trigger.dev本体、`apps/collector`の`trigger.dev` package、`@trigger.dev/sdk`は同じversion系列へ固定する。本体を更新する場合はpackageとlockfileも同じ変更で更新し、staging deploy後にproductionへ反映する。
 
 ### Deploy host
 
@@ -145,7 +145,7 @@ scriptはregistryへloginし、dry-runの後に`TRIGGER_DEPLOY_ENV`で指定し�
 Trigger.dev本体の固定image tagとpackage versionを比較する。
 
 ```bash
-pnpm exec trigger --version
+pnpm --dir apps/collector exec trigger --version
 ```
 
 差異がある場合はdeployせず、互換versionへpackageを揃える。

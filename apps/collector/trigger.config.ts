@@ -11,8 +11,9 @@ const isManagedIndexWorker =
   process.env.TRIGGER_INDEXING === "1" &&
   typeof process.env.TRIGGER_BUILD_MANIFEST_PATH === "string";
 const project = process.env.TRIGGER_PROJECT_REF;
-const localCaRelativePath = "certs/inoue-coolify-local-ca.pem";
-const localCaContainerPath = `/app/${localCaRelativePath}`;
+const localCaImageRelativePath = "certs/inoue-coolify-local-ca.pem";
+const localCaSourceRelativePath = "../../certs/inoue-coolify-local-ca.pem";
+const localCaContainerPath = `/app/${localCaImageRelativePath}`;
 
 if (!project && !isManagedIndexWorker) {
   throw new Error("TRIGGER_PROJECT_REF is required for Trigger.dev commands.");
@@ -32,9 +33,9 @@ export default defineConfig({
             return;
           }
 
-          const caOutputPath = join(manifest.outputPath, localCaRelativePath);
+          const caOutputPath = join(manifest.outputPath, localCaImageRelativePath);
           await mkdir(dirname(caOutputPath), { recursive: true });
-          await copyFile(join(context.workingDir, localCaRelativePath), caOutputPath);
+          await copyFile(join(context.workingDir, localCaSourceRelativePath), caOutputPath);
 
           context.addLayer({
             build: {
@@ -48,8 +49,8 @@ export default defineConfig({
       },
     ],
   },
-  dirs: ["./apps/collector/src/trigger"],
-  extraCACerts: "./certs/inoue-coolify-local-ca.pem",
+  dirs: ["./src/trigger"],
+  extraCACerts: "../../certs/inoue-coolify-local-ca.pem",
   runtime: "node-22",
   maxDuration: 7_200,
   project: project || "trigger-indexing-only",
@@ -63,5 +64,5 @@ export default defineConfig({
     },
     enabledInDev: false,
   },
-  tsconfig: "./apps/collector/tsconfig.json",
+  tsconfig: "./trigger.tsconfig.json",
 });
