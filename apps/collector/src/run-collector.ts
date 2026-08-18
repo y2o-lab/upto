@@ -121,6 +121,17 @@ export async function runCollector(input: RunCollectorInput): Promise<RunCollect
         chunkSize: input.config.summaryChunkChars,
         defaultModel: input.config.geminiModelDefault,
         importantModel: input.config.geminiModelImportant,
+        maxRetries: input.config.geminiRateLimitMaxRetries,
+        requestsPerMinute: input.config.geminiRequestsPerMinute,
+        dependencies: {
+          onRateLimitWait: ({ maxRequestsPerMinute, waitMilliseconds }) => {
+            logger({
+              maxRequestsPerMinute,
+              status: "gemini_rate_limit_wait",
+              waitMilliseconds,
+            });
+          },
+        },
       });
     const fetcher = input.dependencies?.fetcher ?? fetch;
     return await runCollectorWithPersistence({

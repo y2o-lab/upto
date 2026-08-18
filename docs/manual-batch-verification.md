@@ -1,6 +1,6 @@
 # バッチ手動検証手順
 
-更新日: 2026-06-20
+更新日: 2026-08-18
 
 この手順は、collectorのローカル実行とTrigger.dev staging実行について、RSS/API取得、本文抽出、Gemini要約、PostgreSQL保存、冪等性、ログ、retryを確認するためのものです。
 
@@ -116,6 +116,8 @@ set +a
 COLLECTOR_DRY_RUN=false \
 COLLECTOR_MAX_ITEMS_PER_FEED=1 \
 COLLECTOR_CONCURRENCY=1 \
+GEMINI_REQUESTS_PER_MINUTE=5 \
+GEMINI_RATE_LIMIT_MAX_RETRIES=2 \
 pnpm --filter @upto/collector exec tsx src/index.ts
 ```
 
@@ -125,6 +127,7 @@ pnpm --filter @upto/collector exec tsx src/index.ts
 - 単一記事の失敗があっても他の記事とfeedは継続する。
 - 成功記事がDBへ保存される。
 - 全feed取得不能の場合はprocessがfailureで終了する。
+- Gemini 429が発生した場合、最大2回の追加再試行後も失敗した記事だけが失敗として記録される。
 
 ## 8. DB保存結果を確認する
 
@@ -209,9 +212,11 @@ Trigger.dev staging environmentを次の小さい設定にする。
 
 ```env
 COLLECTOR_DRY_RUN=false
-COLLECTOR_CONCURRENCY=1
+COLLECTOR_CONCURRENCY=2
 COLLECTOR_MAX_ITEMS_PER_FEED=1
 SUMMARY_CHUNK_CHARS=12000
+GEMINI_REQUESTS_PER_MINUTE=5
+GEMINI_RATE_LIMIT_MAX_RETRIES=2
 ```
 
 `DATABASE_URL`と`GEMINI_API_KEY`はSecretとして設定する。
@@ -224,6 +229,8 @@ dashboardから`collect-news`を実行し、以下を確認する。
 - DB URL、API key、記事本文、記事URL、内部error messageがcollector structured logに出ない。
 - resultにarticle / feed / failure countがある。
 - DBへ記事とfeed jobが保存される。
+
+少数の新規記事で、Gemini送信が6件以上になる条件（複数記事または長文のチャンク要約）を作る。Trigger.devの時刻付きlogとGemini usage / quotaを照合し、`gemini_rate_limit_wait`が出た場合は6件目以降が最初の5件中もっとも古い開始から60秒経過するまで送信されないことを確認する。429が発生した場合も、再試行前に待機し、残りの記事が継続することを確認する。記事本文、URL、API key、Gemini生レスポンスを記録しない。
 
 ## 13. Staging再実行
 
