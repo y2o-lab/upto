@@ -33,6 +33,8 @@ export const collectorConfigSchema = z.object({
   geminiApiKey: z.string().optional(),
   geminiModelDefault: z.string().default("gemini-3.1-flash-lite"),
   geminiModelImportant: z.string().default("gemini-3.0-flash"),
+  geminiRateLimitMaxRetries: z.coerce.number().int().positive().default(2),
+  geminiRequestsPerMinute: z.coerce.number().int().positive().default(5),
   maxItemsPerFeed: z.coerce.number().int().positive().default(20),
   summaryChunkChars: z.coerce.number().int().min(2000).default(12000),
 });
@@ -48,6 +50,8 @@ export function readCollectorConfig(environment: NodeJS.ProcessEnv = process.env
     geminiApiKey: environment.GEMINI_API_KEY,
     geminiModelDefault: environment.GEMINI_MODEL_DEFAULT,
     geminiModelImportant: environment.GEMINI_MODEL_IMPORTANT,
+    geminiRateLimitMaxRetries: environment.GEMINI_RATE_LIMIT_MAX_RETRIES,
+    geminiRequestsPerMinute: environment.GEMINI_REQUESTS_PER_MINUTE,
     maxItemsPerFeed: environment.COLLECTOR_MAX_ITEMS_PER_FEED,
     summaryChunkChars: environment.SUMMARY_CHUNK_CHARS,
   });
