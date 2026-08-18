@@ -76,6 +76,8 @@ Trigger.dev dashboardのProject Settings > Environment Variablesでstaging / pro
 | `GEMINI_API_KEY`               |    Yes | Gemini API認証                               | production key                           |
 | `GEMINI_MODEL_DEFAULT`         |     No | 通常記事モデル                               | `gemini-3.1-flash-lite`                  |
 | `GEMINI_MODEL_IMPORTANT`       |     No | 重要記事モデル                               | `gemini-3.0-flash`                       |
+| `GEMINI_REQUESTS_PER_MINUTE`   |     No | 1 collector run内のGeminiリクエスト開始上限  | `5`                                      |
+| `GEMINI_RATE_LIMIT_MAX_RETRIES`|     No | Gemini HTTP 429への追加再試行回数            | `2`                                      |
 | `DEBUG`                        |     No | DB書込みをロールバックし、外部通信を行わない | 通常は`false`                            |
 | `COLLECTOR_DRY_RUN`            |     No | 副作用なし実行                               | staging初回は`true`、productionは`false` |
 | `COLLECTOR_CONCURRENCY`        |     No | 記事処理並列数                               | 初期は`1`                                |
@@ -83,6 +85,8 @@ Trigger.dev dashboardのProject Settings > Environment Variablesでstaging / pro
 | `SUMMARY_CHUNK_CHARS`          |     No | 要約chunk文字数                              | `12000`                                  |
 
 secret作成時はTrigger.devのSecret指定を有効にする。DB URL、API key、記事本文、LLM生レスポンスをtask logへ出さない。
+
+`GEMINI_REQUESTS_PER_MINUTE`と`GEMINI_RATE_LIMIT_MAX_RETRIES`は正の整数である。前者は通常モデル・重要モデル・長文チャンク・最終統合・フォールバック・429再試行を合算した、1 collector run内の開始数上限である。値を変更したら対象environmentへ再deployし、少数記事の手動runで設定値とGemini使用量を確認する。
 
 Supabase Direct connectionのCAがrunnerのNode.js信頼ストアにない場合は、Connect画面から取得したServer root certificateのPEM全文を`DATABASE_SSL_CA`へ設定する。`DATABASE_URL`には`sslrootcert`のローカルパスを含めない。`DATABASE_SSL_CA`は改行を含むPEM、または`\n`を含む1行のPEMを受け付ける。
 
@@ -188,8 +192,11 @@ Trigger.dev dashboardのRunsから以下を確認する。
 - feed job id
 - partial failure warning
 - fatal failureと最大2 attemptのretry
+- `gemini_rate_limit_wait`の`waitMilliseconds`と`maxRequestsPerMinute`
 
 記事単位または一部feedの失敗はwarningとして完了し、DBのerror summaryを確認する。設定不備、DB接続不能、全feed取得不能など実行全体が成立しない場合はrun failureとなる。
+
+`gemini_rate_limit_wait`は、Gemini送信前にRPM枠が空くまで待機したことだけを示す構造化ログである。記事本文、URL、API key、Gemini生レスポンスは出力しない。待機が継続して増える場合は、Gemini usage / quotaと`GEMINI_REQUESTS_PER_MINUTE`、記事件数、長文記事数を照合して調整する。
 
 再実行はRunsから対象runを選択してReplay / Reattemptする。再実行後は同一`normalized_url`の重複がなく、要約済み記事で不要なGemini呼出しがないことを確認する。
 

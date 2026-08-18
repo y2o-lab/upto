@@ -33,4 +33,32 @@ describe("readCollectorConfig", () => {
       geminiModelImportant: "gemini-3.0-flash",
     });
   });
+
+  it("defaults Gemini request limiting and retry settings", () => {
+    expect(readCollectorConfig({})).toMatchObject({
+      geminiRateLimitMaxRetries: 2,
+      geminiRequestsPerMinute: 5,
+    });
+  });
+
+  it("reads explicit Gemini request limiting and retry settings", () => {
+    expect(
+      readCollectorConfig({
+        GEMINI_RATE_LIMIT_MAX_RETRIES: "4",
+        GEMINI_REQUESTS_PER_MINUTE: "10",
+      }),
+    ).toMatchObject({
+      geminiRateLimitMaxRetries: 4,
+      geminiRequestsPerMinute: 10,
+    });
+  });
+
+  it.each([
+    { GEMINI_REQUESTS_PER_MINUTE: "0" },
+    { GEMINI_REQUESTS_PER_MINUTE: "1.5" },
+    { GEMINI_RATE_LIMIT_MAX_RETRIES: "0" },
+    { GEMINI_RATE_LIMIT_MAX_RETRIES: "invalid" },
+  ])("rejects invalid Gemini rate limiting settings: %o", (environment) => {
+    expect(() => readCollectorConfig(environment)).toThrow();
+  });
 });

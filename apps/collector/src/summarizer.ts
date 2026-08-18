@@ -3,6 +3,7 @@ import { articleSummarySchema, type ArticleSummary } from "@upto/domain";
 import { z } from "zod";
 
 import { splitArticleIntoChunks } from "./content.js";
+import { createGeminiRateLimiter, type GeminiRateLimiter } from "./gemini-rate-limiter.js";
 
 export type ArticleToSummarize = {
   sourceName: string;
@@ -23,11 +24,24 @@ export type SummaryResult = {
   summary: ArticleSummary;
 };
 
-type GeminiSummarizerOptions = {
+export type GeminiClient = {
+  models: Pick<GoogleGenAI["models"], "generateContent">;
+};
+
+export type GeminiSummarizerOptions = {
   apiKey: string;
   chunkSize: number;
   defaultModel: string;
   importantModel: string;
+  maxRetries: number;
+  requestsPerMinute: number;
+  dependencies?: {
+    ai?: GeminiClient;
+    rateLimiter?: GeminiRateLimiter;
+    random?: () => number;
+    sleep?: (milliseconds: number) => Promise<void>;
+    onRateLimitWait?: (details: { maxRequestsPerMinute: number; waitMilliseconds: number }) => void;
+  };
 };
 
 const geminiSummarySchema = z.object({
@@ -42,19 +56,31 @@ const geminiSummarySchema = z.object({
 });
 
 export function createGeminiSummarizer(options: GeminiSummarizerOptions): Summarizer {
-  const ai = new GoogleGenAI({ apiKey: options.apiKey });
+  const ai = options.dependencies?.ai ?? new GoogleGenAI({ apiKey: options.apiKey });
+  const sendRequest = createGeminiRequestSender({
+    ai,
+    maxRetries: options.maxRetries,
+    random: options.dependencies?.random,
+    rateLimiter:
+      options.dependencies?.rateLimiter ??
+      createGeminiRateLimiter({
+        maxRequestsPerMinute: options.requestsPerMinute,
+        onWait: options.dependencies?.onRateLimitWait,
+      }),
+    sleep: options.dependencies?.sleep,
+  });
 
   return {
     async summarize(article) {
       const model = chooseModel(article, options.defaultModel, options.importantModel);
       try {
-        return await summarizeWithModel(ai, model, article, options.chunkSize);
+        return await summarizeWithModel(sendRequest, model, article, options.chunkSize);
       } catch (error) {
         if (model === options.defaultModel) {
           throw error;
         }
 
-        return summarizeWithModel(ai, options.defaultModel, article, options.chunkSize);
+        return summarizeWithModel(sendRequest, options.defaultModel, article, options.chunkSize);
       }
     },
   };
@@ -100,11 +126,11 @@ function chooseModel(
 }
 
 async function requestChunkSummary(
-  ai: GoogleGenAI,
+  sendRequest: GeminiRequestSender,
   model: string,
   prompt: string,
 ): Promise<string> {
-  const response = await ai.models.generateContent({
+  const response = await sendRequest({
     config: {
       responseMimeType: "text/plain",
     },
@@ -116,7 +142,7 @@ async function requestChunkSummary(
 }
 
 async function summarizeWithModel(
-  ai: GoogleGenAI,
+  sendRequest: GeminiRequestSender,
   model: string,
   article: ArticleToSummarize,
   chunkSize: number,
@@ -130,7 +156,7 @@ async function summarizeWithModel(
   if (chunks.length === 1 && onlyChunk) {
     return {
       modelId: model,
-      summary: await requestFinalSummary(ai, model, buildFinalPrompt(article, onlyChunk)),
+      summary: await requestFinalSummary(sendRequest, model, buildFinalPrompt(article, onlyChunk)),
     };
   }
 
@@ -138,7 +164,7 @@ async function summarizeWithModel(
   for (const [index, chunk] of chunks.entries()) {
     chunkSummaries.push(
       await requestChunkSummary(
-        ai,
+        sendRequest,
         model,
         buildChunkPrompt(article, chunk, index + 1, chunks.length),
       ),
@@ -148,7 +174,7 @@ async function summarizeWithModel(
   return {
     modelId: model,
     summary: await requestFinalSummary(
-      ai,
+      sendRequest,
       model,
       buildFinalPrompt(article, chunkSummaries.join("\n\n")),
     ),
@@ -156,11 +182,11 @@ async function summarizeWithModel(
 }
 
 async function requestFinalSummary(
-  ai: GoogleGenAI,
+  sendRequest: GeminiRequestSender,
   model: string,
   prompt: string,
 ): Promise<ArticleSummary> {
-  const response = await ai.models.generateContent({
+  const response = await sendRequest({
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -222,6 +248,127 @@ async function requestFinalSummary(
     tags: parsed.tags,
     title: parsed.title,
     whyItMatters: parsed.why_it_matters,
+  });
+}
+
+type GeminiGenerateContentRequest = Parameters<GoogleGenAI["models"]["generateContent"]>[0];
+type GeminiRequestSender = (
+  request: GeminiGenerateContentRequest,
+) => ReturnType<GoogleGenAI["models"]["generateContent"]>;
+
+type GeminiRequestSenderOptions = {
+  ai: GeminiClient;
+  maxRetries: number;
+  random?: (() => number) | undefined;
+  rateLimiter: GeminiRateLimiter;
+  sleep?: ((milliseconds: number) => Promise<void>) | undefined;
+};
+
+function createGeminiRequestSender(options: GeminiRequestSenderOptions): GeminiRequestSender {
+  const sleep = options.sleep ?? defaultSleep;
+  const random = options.random ?? Math.random;
+
+  return async (request) => {
+    for (let attempt = 0; ; attempt += 1) {
+      await options.rateLimiter.acquire();
+      try {
+        return await options.ai.models.generateContent(request);
+      } catch (error) {
+        if (!isGeminiRateLimitError(error) || attempt >= options.maxRetries) {
+          throw error;
+        }
+
+        await sleep(retryAfterMilliseconds(error) ?? calculateBackoffMilliseconds(attempt, random));
+      }
+    }
+  };
+}
+
+function isGeminiRateLimitError(error: unknown): boolean {
+  return readErrorStatus(error) === 429;
+}
+
+function readErrorStatus(error: unknown): number | undefined {
+  if (!isRecord(error)) {
+    return undefined;
+  }
+
+  for (const candidate of [error.status, error.statusCode, readNestedStatus(error.response)]) {
+    if (typeof candidate === "number") {
+      return candidate;
+    }
+    if (typeof candidate === "string" && /^\d+$/.test(candidate)) {
+      return Number(candidate);
+    }
+  }
+
+  return undefined;
+}
+
+function readNestedStatus(value: unknown): unknown {
+  return isRecord(value) ? value.status : undefined;
+}
+
+function retryAfterMilliseconds(error: unknown): number | undefined {
+  if (!isRecord(error)) {
+    return undefined;
+  }
+
+  const retryAfter =
+    readHeader(error.headers, "retry-after") ?? readHeader(error.response, "retry-after");
+  if (!retryAfter) {
+    return undefined;
+  }
+
+  const seconds = Number(retryAfter);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.round(seconds * 1_000);
+  }
+
+  const retryDate = Date.parse(retryAfter);
+  return Number.isNaN(retryDate) ? undefined : Math.max(0, retryDate - Date.now());
+}
+
+function readHeader(value: unknown, name: string): string | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const headers = value.headers;
+  if (
+    headers &&
+    typeof headers === "object" &&
+    "get" in headers &&
+    typeof headers.get === "function"
+  ) {
+    const header = headers.get(name);
+    return typeof header === "string" ? header : undefined;
+  }
+
+  if (!isRecord(headers)) {
+    return undefined;
+  }
+
+  for (const [key, header] of Object.entries(headers)) {
+    if (key.toLowerCase() === name && typeof header === "string") {
+      return header;
+    }
+  }
+  return undefined;
+}
+
+function calculateBackoffMilliseconds(attempt: number, random: () => number): number {
+  const cappedBackoff = Math.min(30_000, 1_000 * 2 ** attempt);
+  return Math.round(cappedBackoff * (0.5 + random()));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function defaultSleep(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
   });
 }
 

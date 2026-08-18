@@ -12,6 +12,8 @@ const baseConfig = {
   dryRun: true,
   geminiModelDefault: "gemini-3.1-flash-lite",
   geminiModelImportant: "gemini-3.0-flash",
+  geminiRateLimitMaxRetries: 2,
+  geminiRequestsPerMinute: 5,
   maxItemsPerFeed: 20,
   summaryChunkChars: 12000,
 };
@@ -609,6 +611,106 @@ describe("runCollector", () => {
       status: "article_skipped_duplicate",
       url: "https://example.com/articles/same?utm_source=test",
     });
+  });
+
+  it("shares one summarizer across concurrent articles and preserves article-level failures", async () => {
+    const failures: unknown[] = [];
+    const savedArticles: unknown[] = [];
+    const rss = createRss([
+      {
+        description: "本文A",
+        link: "https://example.com/articles/concurrent-success",
+        pubDate: "Sun, 07 Jun 2026 00:00:00 GMT",
+        title: "Concurrent success",
+      },
+      {
+        description: "本文B",
+        link: "https://example.com/articles/concurrent-failure",
+        pubDate: "Sun, 07 Jun 2026 00:00:00 GMT",
+        title: "Concurrent failure",
+      },
+    ]);
+    const startedTitles: string[] = [];
+    let releaseSummaries: () => void = () => undefined;
+    const summariesReleased = new Promise<void>((resolve) => {
+      releaseSummaries = resolve;
+    });
+    let bothSummariesStarted: () => void = () => undefined;
+    const bothSummariesStartedPromise = new Promise<void>((resolve) => {
+      bothSummariesStarted = resolve;
+    });
+    const summarize = vi.fn<Summarizer["summarize"]>(async (article) => {
+      startedTitles.push(article.title);
+      if (startedTitles.length === 2) {
+        bothSummariesStarted();
+      }
+      await summariesReleased;
+      if (article.title === "Concurrent failure") {
+        throw new Error("summary failed");
+      }
+      return {
+        modelId: "test-model",
+        summary: createSummary(article.title),
+      };
+    });
+    const persistence: Persistence = {
+      async findArticleByNormalizedUrl() {
+        return null;
+      },
+      async finishFeedJob() {
+        return undefined;
+      },
+      async markArticleFailed(input) {
+        failures.push(input);
+      },
+      async saveArticle(input) {
+        savedArticles.push(input);
+        return "article-1";
+      },
+      async startFeedJob() {
+        return {
+          feedEndpointId: "feed-1",
+          jobId: "job-1",
+          sourceId: "source-1",
+        };
+      },
+      async updateArticleMetrics() {
+        return undefined;
+      },
+    };
+
+    const resultPromise = runCollector({
+      config: {
+        ...baseConfig,
+        concurrency: 2,
+        dryRun: false,
+        maxItemsPerFeed: 2,
+      },
+      dependencies: {
+        fetcher: async () => new Response(rss),
+        logger: () => undefined,
+        persistence,
+        summarizer: { summarize },
+      },
+      feeds: [
+        {
+          kind: "rss",
+          name: "Example",
+          siteUrl: "https://example.com",
+          url: "https://example.com/feed.xml",
+        },
+      ],
+    });
+
+    await bothSummariesStartedPromise;
+    releaseSummaries();
+    const result = await resultPromise;
+
+    expect(startedTitles).toHaveLength(2);
+    expect(summarize).toHaveBeenCalledTimes(2);
+    expect(savedArticles).toHaveLength(1);
+    expect(failures).toHaveLength(1);
+    expect(result).toMatchObject({ articleCount: 1, failedCount: 1, successfulFeedCount: 1 });
   });
 
   it("reports a feed-level failure when the feed cannot be fetched", async () => {
