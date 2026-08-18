@@ -23,7 +23,7 @@ sh -n apps/collector/scripts/deploy-trigger.sh
 - Trigger task adapterを含めてtypecheckできる。
 - deploy scriptのshell構文が正しい。
 
-## 2. Docker image検証
+## 2. Deploy hostのDocker検証
 
 collector直接実行用image:
 
@@ -32,21 +32,18 @@ docker build -f apps/collector/Dockerfile -t upto-collector:local .
 docker run --rm -e COLLECTOR_DRY_RUN=true upto-collector:local
 ```
 
-Coolify deploy resource用image:
-
 ```bash
-docker build -f apps/collector/Dockerfile.trigger-deploy -t upto-trigger-deployer:local .
-docker run --rm --entrypoint sh upto-trigger-deployer:local -c \
-  'docker --version && docker buildx version && pnpm exec trigger --version'
+docker version
+docker buildx version
+pnpm exec trigger --version
 ```
 
 期待結果:
 
 - 直接実行imageはdry-run JSONを出して終了する。
-- deploy imageにDocker CLI、Buildx、固定versionのTrigger.dev CLIがある。
-- image historyやbuild logにsecretがない。
+- deploy hostのDocker CLI、Buildx、固定versionのTrigger.dev CLIが利用できる。
 
-host Docker socketをcontainerへmountしない。
+deploy scriptはdeploy host上で実行する。Docker socketをCoolify containerへmountしない。
 
 ## 3. Deploy script guard検証
 
@@ -61,7 +58,7 @@ env -i PATH=/usr/bin:/bin sh apps/collector/scripts/deploy-trigger.sh
 - `TRIGGER_API_URL`不足を示して終了する。
 - secret値は出力しない。
 
-`DOCKER_HOST=unix:///var/run/docker.sock`を与えた場合もdeploy前に拒否されることを確認する。実在tokenやpasswordはこのguard検証に使わない。
+deploy scriptに古い`DOCKER_HOST`、`DOCKER_TLS_VERIFY`、`DOCKER_CERT_PATH`が残っていても、local Docker daemonを使うために解除される。実在tokenやpasswordはguard検証に使わない。
 
 ## 4. ローカルdry-run
 
@@ -194,7 +191,7 @@ pnpm trigger:dev
 
 ## 11. Trigger.dev deploy dry-run
 
-専用build executorとregistry認証を利用できる安全な環境で実行する。
+registry認証を設定済みのdeploy host上で実行する。
 
 ```bash
 pnpm trigger:deploy:dry-run
@@ -283,7 +280,7 @@ dashboardで一時scheduleを作成する。
 
 ## 17. Production前チェック
 
-- stagingとproductionのCoolify resourceが分離されている。
+- stagingとproductionの`TRIGGER_DEPLOY_ENV`を取り違えず、同じ検証済みcommitを明示的にdeployする。
 - production branchはrequired checks付きで保護されている。
 - Trigger.dev、CLI、SDKのversionが互換で固定されている。
 - 旧systemd timerが停止している。

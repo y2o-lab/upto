@@ -10,27 +10,34 @@ const defaultDbState = globalThis as typeof globalThis & {
 
 export type CreateDbOptions = {
   max?: number;
+  sslCa?: string;
 };
 
 export function createPoolConfig(databaseUrl: string, options: CreateDbOptions = {}): PoolConfig {
   const url = parseDatabaseUrl(databaseUrl);
   const max = options.max ?? readPoolMax(process.env.DATABASE_POOL_MAX);
   const sslMode = url.searchParams.get("sslmode");
+  const sslCa = readSslCa(options.sslCa);
 
   if (sslMode === "disable" && !isLocalDatabase(url.hostname)) {
     throw new Error("SSL cannot be disabled for a remote database connection.");
   }
 
+  const remoteDatabase = !isLocalDatabase(url.hostname);
+  const ssl = sslCa
+    ? { ca: sslCa, rejectUnauthorized: true }
+    : remoteDatabase && sslMode === null
+      ? { rejectUnauthorized: true }
+      : undefined;
+
   return {
     allowExitOnIdle: true,
-    connectionString: databaseUrl,
+    connectionString: sslCa ? withoutSslConnectionParameters(url) : databaseUrl,
     connectionTimeoutMillis: 10_000,
     idleTimeoutMillis: 10_000,
     max,
     maxLifetimeSeconds: 300,
-    ...(!isLocalDatabase(url.hostname) && sslMode === null
-      ? { ssl: { rejectUnauthorized: true } }
-      : {}),
+    ...(ssl ? { ssl } : {}),
   };
 }
 
@@ -39,7 +46,13 @@ export function createDb(databaseUrl = process.env.DATABASE_URL, options: Create
     throw new Error("DATABASE_URL is required to create a database client.");
   }
 
-  const pool = new Pool(createPoolConfig(databaseUrl, options));
+  const sslCa = options.sslCa ?? process.env.DATABASE_SSL_CA;
+  const pool = new Pool(
+    createPoolConfig(databaseUrl, {
+      ...options,
+      ...(sslCa === undefined ? {} : { sslCa }),
+    }),
+  );
   return drizzle({ client: pool, schema });
 }
 
@@ -105,4 +118,17 @@ function readPoolMax(value: string | undefined): number {
 
 function isLocalDatabase(hostname: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+}
+
+function readSslCa(value: string | undefined): string | undefined {
+  const certificate = value?.trim();
+  return certificate ? certificate.replaceAll("\\n", "\n") : undefined;
+}
+
+function withoutSslConnectionParameters(url: URL): string {
+  const connectionUrl = new URL(url);
+  for (const name of ["ssl", "sslcert", "sslkey", "sslmode", "sslrootcert"]) {
+    connectionUrl.searchParams.delete(name);
+  }
+  return connectionUrl.toString();
 }

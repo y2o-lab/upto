@@ -17,30 +17,6 @@ require_variable TRIGGER_DEPLOY_ENV
 require_variable TRIGGER_REGISTRY_HOST
 require_variable TRIGGER_REGISTRY_USERNAME
 require_variable TRIGGER_REGISTRY_PASSWORD
-require_variable DOCKER_HOST
-require_variable DOCKER_CERT_PATH
-
-case "$DOCKER_HOST" in
-  unix://* | */var/run/docker.sock)
-    echo "A host Docker socket is not allowed. Use a dedicated TLS-protected build executor." >&2
-    exit 1
-    ;;
-  tcp://*) ;;
-  *)
-    echo "DOCKER_HOST must use a remote tcp:// build executor." >&2
-    exit 1
-    ;;
-esac
-
-if [ "${DOCKER_TLS_VERIFY:-}" != "1" ]; then
-  echo "DOCKER_TLS_VERIFY=1 is required." >&2
-  exit 1
-fi
-
-if [ ! -r "$DOCKER_CERT_PATH/ca.pem" ] || [ ! -r "$DOCKER_CERT_PATH/cert.pem" ] || [ ! -r "$DOCKER_CERT_PATH/key.pem" ]; then
-  echo "Docker TLS client certificates are missing from DOCKER_CERT_PATH." >&2
-  exit 1
-fi
 
 case "$TRIGGER_DEPLOY_ENV" in
   staging | prod) ;;
@@ -50,12 +26,14 @@ case "$TRIGGER_DEPLOY_ENV" in
     ;;
 esac
 
-echo "Deploying Trigger.dev tasks from source commit: ${SOURCE_COMMIT:-unknown}"
-docker version >/dev/null
 DOCKER_CONFIG="${TMPDIR:-/tmp}/upto-docker-config-$$"
 export DOCKER_CONFIG
 umask 077
 mkdir "$DOCKER_CONFIG"
+
+# Deployment runs directly on the server that hosts Coolify and Trigger.dev.
+# Ignore stale remote Docker settings so the Docker CLI uses its local socket.
+unset DOCKER_CERT_PATH DOCKER_CONTEXT DOCKER_HOST DOCKER_TLS_VERIFY
 
 cleanup() {
   docker logout "$TRIGGER_REGISTRY_HOST" >/dev/null 2>&1 || true
@@ -63,6 +41,13 @@ cleanup() {
   rmdir "$DOCKER_CONFIG" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
+
+echo "Deploying Trigger.dev tasks from source commit: ${SOURCE_COMMIT:-unknown}"
+echo "Using the local Docker daemon for the task image build."
+if ! docker version >/dev/null; then
+  echo "Cannot access the local Docker daemon. Use the deploy host account that can access /var/run/docker.sock." >&2
+  exit 1
+fi
 
 printf '%s' "$TRIGGER_REGISTRY_PASSWORD" | docker login \
   --username "$TRIGGER_REGISTRY_USERNAME" \

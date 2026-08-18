@@ -34,6 +34,21 @@ describe("database client", () => {
     expect(config.ssl).toBeUndefined();
   });
 
+  it("uses an explicitly trusted CA for a remote database", () => {
+    const config = createPoolConfig(
+      "postgres://user:password@db.example.com:5432/postgres?sslmode=verify-full&sslrootcert=/unavailable/ca.crt",
+      { sslCa: "-----BEGIN CERTIFICATE-----\\ncertificate\\n-----END CERTIFICATE-----" },
+    );
+
+    expect(config).toMatchObject({
+      connectionString: "postgres://user:password@db.example.com:5432/postgres",
+      ssl: {
+        ca: "-----BEGIN CERTIFICATE-----\ncertificate\n-----END CERTIFICATE-----",
+        rejectUnauthorized: true,
+      },
+    });
+  });
+
   it("reuses the default database client within one process", () => {
     const databaseUrl = "postgres://upto:upto@localhost:5432/upto";
 

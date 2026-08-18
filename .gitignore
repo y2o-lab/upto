@@ -43,6 +43,7 @@ pnpm-debug.log*
 *.pem
 *.key
 *.crt
+.certs
 
 # Docker and local runtime state
 docker-data/
@@ -66,6 +67,9 @@ Thumbs.db
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+/trigger.config.js
+/trigger.config.d.ts
+/trigger.config.d.ts.map
 
 # Vercel
 .vercel/

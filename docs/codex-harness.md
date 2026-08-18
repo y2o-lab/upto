@@ -115,6 +115,7 @@ As of `codex-cli 0.137.0`, `--strict-config` is not supported by the local-only 
 
 - Update this document when adding or removing Codex control surfaces.
 - Keep `AGENTS.md` project identity and validation commands aligned with the latest Accepted ADR; superseded deployment mechanisms must not remain as active agent guidance.
+- Collector task deployment is validated from the deploy host with `docker version`, `docker buildx version`, and `pnpm trigger:deploy:dry-run`; the removed Coolify deploy-resource Dockerfile is not an active validation target.
 - Do not store user-specific credentials or private absolute paths in repo-scoped files.
 - Keep hooks conservative. They should block only clear high-risk cases to avoid surprising normal development.
 - Prefer rules for command approval behavior and hooks for cross-cutting prompt/tool checks.
