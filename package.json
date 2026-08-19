@@ -29,7 +29,7 @@
     "@types/node": "25.9.3",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
-    "jsdom": "29.1.1",
+    "jsdom": "30.0.1",
     "oxfmt": "0.54.0",
     "oxlint": "1.69.0",
     "tsx": "4.22.4",
@@ -40,5 +40,17 @@
     "node": ">=22.14.0",
     "pnpm": ">=10.8.1"
   },
-  "packageManager": "pnpm@10.8.1"
+  "packageManager": "pnpm@10.8.1",
+  "pnpm": {
+    "overrides": {
+      "@opentelemetry/core": "2.10.0",
+      "cookie": "0.7.2",
+      "deepmerge-ts": "8.0.1",
+      "engine.io": "6.6.9",
+      "esbuild": "0.28.2",
+      "giget": "2.0.0",
+      "nanoid": "3.3.18",
+      "ws": "8.21.3"
+    }
+  }
 }

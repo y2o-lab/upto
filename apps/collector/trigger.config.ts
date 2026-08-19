@@ -2,7 +2,7 @@ import { defineConfig } from "@trigger.dev/sdk";
 import { copyFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-// Trigger.dev 4.4.6 starts its managed index worker with only the project's
+// Trigger.dev starts its managed index worker with only the project's
 // runtime environment variables. It deliberately omits the CLI-only
 // TRIGGER_PROJECT_REF, even though it re-imports this config. The controller
 // already has the real project ref; the worker only needs a schema-valid value
@@ -27,7 +27,7 @@ export default defineConfig({
     external: ["jsdom"],
     extensions: [
       {
-        name: "local-ca-for-trigger-4-4-6",
+        name: "local-ca-for-trigger",
         async onBuildComplete(context, manifest) {
           if (context.target !== "deploy") {
             return;
@@ -43,7 +43,7 @@ export default defineConfig({
                 NODE_EXTRA_CA_CERTS: localCaContainerPath,
               },
             },
-            id: "local-ca-for-trigger-4-4-6",
+            id: "local-ca-for-trigger",
           });
         },
       },

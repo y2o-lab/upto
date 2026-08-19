@@ -102,8 +102,10 @@ describe("Trigger.dev configuration", () => {
         await readFile(join(outputDirectory, "build.json"), "utf8"),
       ) as { build: Record<string, never>; deploy: Record<string, never> };
 
-      expect(manifest.externals).toContainEqual({ name: "jsdom", version: "29.1.1" });
-      expect(packageJson.dependencies.jsdom).toBe("29.1.1");
+      expect(manifest.externals).toContainEqual({
+        name: "jsdom",
+        version: packageJson.dependencies.jsdom,
+      });
       expect(bundledCode.join("\n")).not.toContain("default-stylesheet.css");
       expect(bundledCode.join("\n")).not.toContain(runtimeSecret);
       expect(buildManifest.deploy).toEqual({});
@@ -136,7 +138,7 @@ describe("Trigger.dev configuration", () => {
     );
   });
 
-  it("supplies the private CA to the Trigger.dev 4.4.6 image build", async () => {
+  it("supplies the private CA to the Trigger.dev image build", async () => {
     vi.stubEnv("TRIGGER_PROJECT_REF", "proj_test");
 
     const configUrl = new URL("../trigger.config.ts", import.meta.url);
@@ -144,7 +146,7 @@ describe("Trigger.dev configuration", () => {
       default: TriggerConfig;
     };
     const extension = config.build?.extensions?.find(
-      (candidate) => candidate.name === "local-ca-for-trigger-4-4-6",
+      (candidate) => candidate.name === "local-ca-for-trigger",
     );
     const layers: unknown[] = [];
     const temporaryDirectory = await mkdtemp(join(tmpdir(), "upto-trigger-config-"));
@@ -180,7 +182,7 @@ describe("Trigger.dev configuration", () => {
             NODE_EXTRA_CA_CERTS: "/app/certs/inoue-coolify-local-ca.pem",
           },
         },
-        id: "local-ca-for-trigger-4-4-6",
+        id: "local-ca-for-trigger",
       },
     ]);
   });
@@ -198,13 +200,14 @@ describe("Trigger.dev configuration", () => {
 
     expect(config.runtime).toBe("node-22");
     expect(config.build.extensions?.map((extension: { name: string }) => extension.name)).toContain(
-      "local-ca-for-trigger-4-4-6",
+      "local-ca-for-trigger",
     );
   });
 
   it("runs each Trigger.dev command from the collector package", async () => {
     const collectorPackageJsonPath = fileURLToPath(new URL("../package.json", import.meta.url));
     const collectorPackageJson = JSON.parse(await readFile(collectorPackageJsonPath, "utf8")) as {
+      dependencies: Record<string, string>;
       devDependencies: Record<string, string>;
       scripts: Record<string, string>;
     };
@@ -234,7 +237,9 @@ describe("Trigger.dev configuration", () => {
       expect(collectorPackageJson.scripts[scriptName]).toContain("--builder trigger-host");
     }
 
-    expect(collectorPackageJson.devDependencies["trigger.dev"]).toBe("4.4.6");
+    expect(collectorPackageJson.devDependencies["trigger.dev"]).toBe(
+      collectorPackageJson.dependencies["@trigger.dev/sdk"],
+    );
     expect(collectorPackageJson.devDependencies.typescript).toBe("5.9.3");
     expect(collectorPackageJson.scripts.typecheck).toContain("pnpm --dir ../.. exec tsc");
   });

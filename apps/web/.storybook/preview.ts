@@ -8,9 +8,6 @@ const preview = {
         date: /Date$/i,
       },
     },
-    nextjs: {
-      appDirectory: true,
-    },
   },
 };
 
