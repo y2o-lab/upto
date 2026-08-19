@@ -15,6 +15,7 @@ type BuildExtension = {
 type TriggerConfig = {
   build?: { extensions?: BuildExtension[]; external?: string[] };
   maxDuration: number;
+  tsconfig: string;
 };
 
 describe("Trigger.dev configuration", () => {
@@ -26,7 +27,7 @@ describe("Trigger.dev configuration", () => {
   it("allows each collector task attempt to run for up to two hours", async () => {
     vi.stubEnv("TRIGGER_PROJECT_REF", "proj_test");
 
-    const configUrl = new URL("../../../trigger.config.ts", import.meta.url);
+    const configUrl = new URL("../trigger.config.ts", import.meta.url);
     const { default: config } = (await import(configUrl.href)) as {
       default: TriggerConfig;
     };
@@ -37,7 +38,7 @@ describe("Trigger.dev configuration", () => {
   it("keeps jsdom external so its runtime CSS assets remain available", async () => {
     vi.stubEnv("TRIGGER_PROJECT_REF", "proj_test");
 
-    const configUrl = new URL("../../../trigger.config.ts", import.meta.url);
+    const configUrl = new URL("../trigger.config.ts", import.meta.url);
     const { default: config } = (await import(configUrl.href)) as {
       default: TriggerConfig;
     };
@@ -45,18 +46,32 @@ describe("Trigger.dev configuration", () => {
     expect(config.build?.external).toContain("jsdom");
   });
 
+  it("uses a Trigger-specific TypeScript configuration", async () => {
+    vi.stubEnv("TRIGGER_PROJECT_REF", "proj_test");
+
+    const configUrl = new URL("../trigger.config.ts", import.meta.url);
+    const { default: config } = (await import(configUrl.href)) as {
+      default: TriggerConfig;
+    };
+
+    expect(config.tsconfig).toBe("./trigger.tsconfig.json");
+  });
+
   it("writes jsdom as an external dependency in the deploy bundle", async () => {
     vi.stubEnv("TRIGGER_PROJECT_REF", "proj_test");
 
-    const rootDirectory = fileURLToPath(new URL("../../../", import.meta.url));
+    const collectorDirectory = fileURLToPath(new URL("../", import.meta.url));
     const outputDirectory = await mkdtemp(join(tmpdir(), "upto-trigger-bundle-"));
     const runtimeSecret = "test-runtime-secret-that-must-not-be-in-the-image";
-    const { buildWorker } =
-      await import("../../../node_modules/trigger.dev/dist/esm/build/buildWorker.js");
-    const { loadConfig } = await import("../../../node_modules/trigger.dev/dist/esm/config.js");
+    const { buildWorker } = await import(
+      new URL("../node_modules/trigger.dev/dist/esm/build/buildWorker.js", import.meta.url).href
+    );
+    const { loadConfig } = await import(
+      new URL("../node_modules/trigger.dev/dist/esm/config.js", import.meta.url).href
+    );
     const config = await loadConfig({
       configFile: "trigger.config.ts",
-      cwd: rootDirectory,
+      cwd: collectorDirectory,
     });
 
     try {
@@ -87,8 +102,10 @@ describe("Trigger.dev configuration", () => {
         await readFile(join(outputDirectory, "build.json"), "utf8"),
       ) as { build: Record<string, never>; deploy: Record<string, never> };
 
-      expect(manifest.externals).toContainEqual({ name: "jsdom", version: "29.1.1" });
-      expect(packageJson.dependencies.jsdom).toBe("29.1.1");
+      expect(manifest.externals).toContainEqual({
+        name: "jsdom",
+        version: packageJson.dependencies.jsdom,
+      });
       expect(bundledCode.join("\n")).not.toContain("default-stylesheet.css");
       expect(bundledCode.join("\n")).not.toContain(runtimeSecret);
       expect(buildManifest.deploy).toEqual({});
@@ -103,7 +120,7 @@ describe("Trigger.dev configuration", () => {
     vi.stubEnv("TRIGGER_INDEXING", "1");
     vi.stubEnv("TRIGGER_BUILD_MANIFEST_PATH", "./build.json");
 
-    const configUrl = new URL("../../../trigger.config.ts", import.meta.url);
+    const configUrl = new URL("../trigger.config.ts", import.meta.url);
     const { default: config } = (await import(configUrl.href)) as {
       default: TriggerConfig & { project: string };
     };
@@ -114,30 +131,31 @@ describe("Trigger.dev configuration", () => {
   it("still requires the project ref outside the managed index worker", async () => {
     vi.stubEnv("TRIGGER_PROJECT_REF", "");
 
-    const configUrl = new URL("../../../trigger.config.ts", import.meta.url);
+    const configUrl = new URL("../trigger.config.ts", import.meta.url);
 
     await expect(import(configUrl.href)).rejects.toThrow(
       "TRIGGER_PROJECT_REF is required for Trigger.dev commands.",
     );
   });
 
-  it("supplies the private CA to the Trigger.dev 4.4.6 image build", async () => {
+  it("supplies the private CA to the Trigger.dev image build", async () => {
     vi.stubEnv("TRIGGER_PROJECT_REF", "proj_test");
 
-    const configUrl = new URL("../../../trigger.config.ts", import.meta.url);
+    const configUrl = new URL("../trigger.config.ts", import.meta.url);
     const { default: config } = (await import(configUrl.href)) as {
       default: TriggerConfig;
     };
     const extension = config.build?.extensions?.find(
-      (candidate) => candidate.name === "local-ca-for-trigger-4-4-6",
+      (candidate) => candidate.name === "local-ca-for-trigger",
     );
     const layers: unknown[] = [];
     const temporaryDirectory = await mkdtemp(join(tmpdir(), "upto-trigger-config-"));
-    const sourceDirectory = join(temporaryDirectory, "source");
+    const sourceDirectory = join(temporaryDirectory, "apps", "collector");
     const outputDirectory = join(temporaryDirectory, "output");
 
-    await mkdir(join(sourceDirectory, "certs"), { recursive: true });
-    await writeFile(join(sourceDirectory, "certs", "inoue-coolify-local-ca.pem"), "test-ca");
+    await mkdir(sourceDirectory, { recursive: true });
+    await mkdir(join(temporaryDirectory, "certs"), { recursive: true });
+    await writeFile(join(temporaryDirectory, "certs", "inoue-coolify-local-ca.pem"), "test-ca");
 
     try {
       await extension?.onBuildComplete?.(
@@ -164,7 +182,7 @@ describe("Trigger.dev configuration", () => {
             NODE_EXTRA_CA_CERTS: "/app/certs/inoue-coolify-local-ca.pem",
           },
         },
-        id: "local-ca-for-trigger-4-4-6",
+        id: "local-ca-for-trigger",
       },
     ]);
   });
@@ -172,21 +190,29 @@ describe("Trigger.dev configuration", () => {
   it("preserves the CA extension when the CLI explicitly loads the TypeScript config", async () => {
     vi.stubEnv("TRIGGER_PROJECT_REF", "proj_test");
 
-    const { loadConfig } = await import("../../../node_modules/trigger.dev/dist/esm/config.js");
+    const { loadConfig } = await import(
+      new URL("../node_modules/trigger.dev/dist/esm/config.js", import.meta.url).href
+    );
     const config = await loadConfig({
       configFile: "trigger.config.ts",
-      cwd: fileURLToPath(new URL("../../../", import.meta.url)),
+      cwd: fileURLToPath(new URL("../", import.meta.url)),
     });
 
     expect(config.runtime).toBe("node-22");
     expect(config.build.extensions?.map((extension: { name: string }) => extension.name)).toContain(
-      "local-ca-for-trigger-4-4-6",
+      "local-ca-for-trigger",
     );
   });
 
-  it("uses the TypeScript config for every Trigger.dev command", async () => {
-    const packageJsonPath = fileURLToPath(new URL("../../../package.json", import.meta.url));
-    const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8")) as {
+  it("runs each Trigger.dev command from the collector package", async () => {
+    const collectorPackageJsonPath = fileURLToPath(new URL("../package.json", import.meta.url));
+    const collectorPackageJson = JSON.parse(await readFile(collectorPackageJsonPath, "utf8")) as {
+      dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
+      scripts: Record<string, string>;
+    };
+    const rootPackageJsonPath = fileURLToPath(new URL("../../../package.json", import.meta.url));
+    const rootPackageJson = JSON.parse(await readFile(rootPackageJsonPath, "utf8")) as {
       scripts: Record<string, string>;
     };
 
@@ -196,7 +222,10 @@ describe("Trigger.dev configuration", () => {
       "trigger:deploy:staging",
       "trigger:dev",
     ]) {
-      expect(packageJson.scripts[scriptName]).toContain("--config trigger.config.ts");
+      expect(collectorPackageJson.scripts[scriptName]).toContain("--config trigger.config.ts");
+      expect(rootPackageJson.scripts[scriptName]).toBe(
+        `pnpm --dir apps/collector run ${scriptName}`,
+      );
     }
 
     for (const scriptName of [
@@ -204,8 +233,14 @@ describe("Trigger.dev configuration", () => {
       "trigger:deploy:prod",
       "trigger:deploy:staging",
     ]) {
-      expect(packageJson.scripts[scriptName]).toContain("--network host");
-      expect(packageJson.scripts[scriptName]).toContain("--builder trigger-host");
+      expect(collectorPackageJson.scripts[scriptName]).toContain("--network host");
+      expect(collectorPackageJson.scripts[scriptName]).toContain("--builder trigger-host");
     }
+
+    expect(collectorPackageJson.devDependencies["trigger.dev"]).toBe(
+      collectorPackageJson.dependencies["@trigger.dev/sdk"],
+    );
+    expect(collectorPackageJson.devDependencies.typescript).toBe("5.9.3");
+    expect(collectorPackageJson.scripts.typecheck).toContain("pnpm --dir ../.. exec tsc");
   });
 });
