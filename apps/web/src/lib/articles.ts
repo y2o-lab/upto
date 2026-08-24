@@ -7,6 +7,7 @@ import {
   desc,
   eq,
   getDb,
+  inArray,
   sources,
   sql,
 } from "@upto/db";
@@ -209,6 +210,46 @@ export async function getInitialArticles(limit = defaultPageLimit): Promise<Feed
   return page.articles;
 }
 
+export async function getArticlesByIds(articleIds: string[]): Promise<FeedArticle[]> {
+  const uniqueArticleIds = [...new Set(articleIds)];
+  if (uniqueArticleIds.length === 0) {
+    return [];
+  }
+
+  if (process.env.UPTO_WEB_USE_FIXTURE_DATA === "true") {
+    return orderArticlesByIds(fixtureArticles, uniqueArticleIds);
+  }
+
+  const db = getDb();
+  const rows = await db
+    .select({
+      bookmarks: articleMetrics.bookmarks,
+      bullets: articleSummaries.bullets,
+      createdAt: articles.createdAt,
+      id: articles.id,
+      modelId: articleSummaries.modelId,
+      normalizedUrl: articles.normalizedUrl,
+      originalUrl: articles.originalUrl,
+      publishedAt: articles.publishedAt,
+      score: articleMetrics.score,
+      shortSummary: articleSummaries.shortSummary,
+      sourceId: articles.sourceId,
+      sourceName: sources.name,
+      sourceSiteUrl: sources.siteUrl,
+      summaryJson: articleSummaries.summaryJson,
+      title: articles.title,
+      topics: articleSummaries.topics,
+      views: articleMetrics.views,
+    })
+    .from(articles)
+    .innerJoin(sources, eq(articles.sourceId, sources.id))
+    .innerJoin(articleSummaries, eq(articles.id, articleSummaries.articleId))
+    .leftJoin(articleMetrics, eq(articles.id, articleMetrics.articleId))
+    .where(inArray(articles.id, uniqueArticleIds));
+
+  return orderArticlesByIds(rows.map(mapArticleRow), uniqueArticleIds);
+}
+
 export function mapArticleRow(row: ArticleRow): FeedArticle {
   const summary = readString(row.summaryJson.summary) ?? row.shortSummary;
   const oneLineSummary = readString(row.summaryJson.one_line_summary) ?? row.shortSummary;
@@ -300,6 +341,14 @@ function paginateRows(
     nextCursor: hasMore && lastRow ? encodeArticlePageCursor(createCursorFromRow(lastRow)) : null,
     snapshotAt: input.snapshotAt,
   };
+}
+
+function orderArticlesByIds(articleList: FeedArticle[], articleIds: string[]): FeedArticle[] {
+  const articlesById = new Map(articleList.map((article) => [article.id, article]));
+  return articleIds.flatMap((articleId) => {
+    const article = articlesById.get(articleId);
+    return article ? [article] : [];
+  });
 }
 
 function normalizeArticlePageLimit(limit: number | undefined): number {

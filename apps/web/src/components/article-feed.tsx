@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ArticlePage, FeedArticle } from "../lib/articles";
@@ -11,12 +12,16 @@ import { ThemeToggle } from "./theme-toggle";
 
 type ArticleFeedProps = {
   articles: FeedArticle[];
+  emptyState?: "default" | "saved";
   feedType?: string;
   initialActiveIndex?: number;
   initialCursor?: string | null;
   initialHasMore?: boolean;
   initialSnapshotAt?: string;
+  isLoading?: boolean;
+  loadError?: string | null;
   loadMoreArticles?: (cursor: string, limit: number, snapshotAt: string) => Promise<ArticlePage>;
+  onRetry?: () => void;
 };
 
 const wheelThreshold = 70;
@@ -26,12 +31,16 @@ const maxProgressDots = 12;
 
 export function ArticleFeed({
   articles,
+  emptyState = "default",
   feedType = "home",
   initialActiveIndex = 0,
   initialCursor = null,
   initialHasMore = false,
   initialSnapshotAt,
+  isLoading = false,
+  loadError = null,
   loadMoreArticles = fetchArticlePage,
+  onRetry,
 }: ArticleFeedProps) {
   const generatedSnapshotAtRef = useRef(initialSnapshotAt ?? new Date().toISOString());
   const effectiveInitialSnapshotAt = initialSnapshotAt ?? generatedSnapshotAtRef.current;
@@ -310,18 +319,35 @@ export function ArticleFeed({
   }
 
   if (feedArticles.length === 0) {
+    const isSavedFeed = emptyState === "saved";
     return (
       <section className="flex h-dvh flex-col overflow-hidden">
-        <AppHeader activeIndex={0} articleCount={0} hasMore={false} />
+        <AppHeader activeIndex={0} articleCount={0} feedType={feedType} hasMore={false} />
         <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col justify-center px-4">
           <p className="text-sm font-medium text-[var(--accent)]">Upto</p>
-          <h1 className="mt-3 text-3xl leading-tight font-semibold text-balance">
-            まだ表示できる記事がありません
-          </h1>
+          <h2 className="mt-3 text-3xl leading-tight font-semibold text-balance">
+            {isLoading
+              ? "保存した記事を読み込んでいます"
+              : loadError
+                ? "保存した記事を読み込めませんでした"
+                : isSavedFeed
+                  ? "保存した記事はありません"
+                  : "まだ表示できる記事がありません"}
+          </h2>
           <p className="mt-5 max-w-xl leading-7 text-[var(--muted)]">
-            collector batch を実行して、要約済みの記事がDBへ保存されるとここに表示されます。
-            本番環境ではデータベース接続設定を確認し、定期バッチを起動してください。
+            {isSavedFeed
+              ? "記事の☆を選択すると、あとでここからまとめて読めます。"
+              : "collector batch を実行して、要約済みの記事がDBへ保存されるとここに表示されます。本番環境ではデータベース接続設定を確認し、定期バッチを起動してください。"}
           </p>
+          {loadError && onRetry ? (
+            <button
+              className="mt-5 w-fit rounded-md bg-[var(--foreground)] px-4 py-2 text-sm font-medium text-[var(--background)] transition hover:bg-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+              onClick={onRetry}
+              type="button"
+            >
+              再試行
+            </button>
+          ) : null}
         </div>
       </section>
     );
@@ -329,7 +355,12 @@ export function ArticleFeed({
 
   return (
     <section className="flex h-dvh flex-col overflow-hidden">
-      <AppHeader activeIndex={activeIndex} articleCount={feedArticles.length} hasMore={hasMore} />
+      <AppHeader
+        activeIndex={activeIndex}
+        articleCount={feedArticles.length}
+        feedType={feedType}
+        hasMore={hasMore}
+      />
 
       <div
         ref={containerRef}
@@ -345,6 +376,7 @@ export function ArticleFeed({
           return (
             <article
               data-index={index}
+              data-testid={`article-card-${index}`}
               key={article.id}
               className="mx-auto flex h-full max-w-3xl snap-start items-center px-4 py-3"
             >
@@ -528,12 +560,15 @@ export function ArticleFeed({
 function AppHeader({
   activeIndex,
   articleCount,
+  feedType,
   hasMore,
 }: {
   activeIndex: number;
   articleCount: number;
+  feedType: string;
   hasMore: boolean;
 }) {
+  const isSavedFeed = feedType === "bookmarks";
   return (
     <header className="shrink-0 border-b border-[var(--border)] bg-[var(--background)]/92 px-4 py-3 backdrop-blur">
       <div className="mx-auto flex max-w-3xl items-center justify-between gap-4">
@@ -542,6 +577,12 @@ function AppHeader({
           <p className="mt-1 text-xs text-[var(--muted)]">日本語ITニュース要約</p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-sm text-[var(--muted)] transition hover:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+            href={isSavedFeed ? "/" : "/bookmarks"}
+          >
+            {isSavedFeed ? "新着記事" : "保存記事"}
+          </Link>
           <ThemeToggle />
           <span className="rounded-full bg-[var(--surface)] px-3 py-1 text-sm text-[var(--muted)] shadow-sm">
             {articleCount === 0

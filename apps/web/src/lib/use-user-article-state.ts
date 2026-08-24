@@ -12,12 +12,49 @@ export type UserArticleStateSnapshot = {
   savedArticleIds: Set<string>;
 };
 
+export type SavedArticleIdsSnapshot = {
+  isLoaded: boolean;
+  savedArticleIds: string[];
+};
+
 const emptySnapshot: UserArticleStateSnapshot = {
   isLoaded: false,
   readArticleIds: new Set(),
   readingProgressArticleId: null,
   savedArticleIds: new Set(),
 };
+
+const emptySavedArticleIdsSnapshot: SavedArticleIdsSnapshot = {
+  isLoaded: false,
+  savedArticleIds: [],
+};
+
+export function useSavedArticleIds(): SavedArticleIdsSnapshot {
+  const [snapshot, setSnapshot] = useState<SavedArticleIdsSnapshot>(emptySavedArticleIdsSnapshot);
+
+  useEffect(() => {
+    const db = getUserStateDb();
+    if (!db) {
+      setSnapshot({ isLoaded: true, savedArticleIds: [] });
+      return;
+    }
+
+    const subscription = liveQuery(() =>
+      db.savedArticles.orderBy("savedAt").reverse().toArray(),
+    ).subscribe({
+      error: () => setSnapshot({ isLoaded: true, savedArticleIds: [] }),
+      next: (savedArticles) =>
+        setSnapshot({
+          isLoaded: true,
+          savedArticleIds: savedArticles.map((article) => article.articleId),
+        }),
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  return snapshot;
+}
 
 export function useUserArticleState(
   articleIds: string[],

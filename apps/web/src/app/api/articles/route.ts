@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getArticlesPage } from "../../../lib/articles";
+import { getArticlesByIds, getArticlesPage } from "../../../lib/articles";
 import { logError } from "../../../lib/logging";
 
 type ArticleApiErrorCode =
@@ -24,9 +24,27 @@ const searchParamsSchema = z.object({
 });
 
 const snapshotAtSchema = z.string().datetime();
+const savedArticleIdsSchema = z.array(z.string().uuid()).min(1).max(100);
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
+  const savedArticleIds = url.searchParams.get("ids");
+
+  if (savedArticleIds !== null) {
+    const parsedArticleIds = savedArticleIdsSchema.safeParse(savedArticleIds.split(","));
+    if (!parsedArticleIds.success) {
+      return articleApiError("invalid_request", 400);
+    }
+
+    try {
+      const articles = await getArticlesByIds(parsedArticleIds.data);
+      return NextResponse.json({ articles }, { headers: { "Cache-Control": "no-store" } });
+    } catch (error) {
+      logError("Failed to fetch saved articles", error);
+      return articleApiError("internal_error", 500);
+    }
+  }
+
   const parsedParams = searchParamsSchema.safeParse({
     cursor: url.searchParams.get("cursor"),
     limit: url.searchParams.get("limit") ?? undefined,
