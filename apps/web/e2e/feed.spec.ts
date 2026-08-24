@@ -125,6 +125,24 @@ test("persists saved, progress, and theme state in IndexedDB", async ({ page }) 
   await expect(page.getByTestId("save-article-0")).toHaveAttribute("data-saved", "true");
 });
 
+test("opens the saved article list and only shows saved articles", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByTestId("article-feed")).toHaveAttribute("data-ready", "true");
+
+  const savedTitle = await page.locator("article[data-index='0'] h2").textContent();
+  await page.getByTestId("save-article-0").click();
+  await expect(page.getByTestId("save-article-0")).toHaveAttribute("data-saved", "true");
+
+  await page.getByRole("link", { name: "保存記事" }).click();
+  await expect(page).toHaveURL("/bookmarks");
+  await expect(page.getByTestId("article-feed")).toHaveAttribute("data-ready", "true");
+  await expect(page.locator("article[data-index='0'] h2")).toHaveText(savedTitle ?? "");
+  await expect(page.getByTestId("article-card-1")).toHaveCount(0);
+
+  await page.getByTestId("save-article-0").click();
+  await expect(page.getByTestId("bookmarks-empty")).toBeVisible();
+});
+
 test("keeps summaries directly readable without a summary dialog", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByTestId("article-feed")).toHaveAttribute("data-ready", "true");
