@@ -3,14 +3,15 @@ variable "zone_id" {
   type        = string
 }
 
-variable "vercel_domains" {
-  description = "CNAME records for Vercel custom domains, keyed by FQDN."
+variable "dns_records" {
+  description = "Vercel-recommended Cloudflare DNS records, keyed by FQDN."
   type = map(object({
-    cname_record_name = string
-    cname_target      = string
-    ttl               = optional(number, 1)
-    proxied           = optional(bool, false)
-    comment           = optional(string, "Managed by Terraform for Vercel")
+    name    = string
+    type    = string
+    content = string
+    ttl     = optional(number, 1)
+    proxied = optional(bool, false)
+    comment = optional(string, "Managed by Terraform for Vercel")
   }))
 }
 

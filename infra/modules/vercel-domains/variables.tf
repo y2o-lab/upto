@@ -11,10 +11,10 @@ variable "vercel_team_id" {
 variable "vercel_domains" {
   description = "Map keyed by fully-qualified Vercel custom domain."
   type = map(object({
-    cname_record_name = string
-    cname_target      = string
-    ttl               = optional(number, 1)
-    proxied           = optional(bool, false)
-    comment           = optional(string, "Managed by Terraform for Vercel")
+    record_name = string
+    record_type = optional(string, "CNAME")
+    ttl         = optional(number, 1)
+    proxied     = optional(bool, false)
+    comment     = optional(string, "Managed by Terraform for Vercel")
   }))
 }

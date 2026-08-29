@@ -30,13 +30,6 @@ permissions:
 env:
   TF_IN_AUTOMATION: "true"
   TF_INPUT: "false"
-  TF_VAR_cloudflare_zone_id: ${{ vars.TF_CLOUDFLARE_ZONE_ID }}
-  TF_VAR_vercel_project_name: ${{ vars.TF_VERCEL_PROJECT_NAME }}
-  TF_VAR_vercel_team_id: ${{ vars.TF_VERCEL_TEAM_ID }}
-  TF_VAR_vercel_git_repository: ${{ vars.TF_VERCEL_GIT_REPOSITORY }}
-  TF_VAR_vercel_production_branch: ${{ vars.TF_VERCEL_PRODUCTION_BRANCH }}
-  TF_VAR_vercel_domains: ${{ vars.TF_VERCEL_DOMAINS_JSON }}
-  TF_VAR_verification_dns_records: ${{ vars.TF_VERIFICATION_DNS_RECORDS_JSON || '{}' }}
 
 jobs:
   validate:

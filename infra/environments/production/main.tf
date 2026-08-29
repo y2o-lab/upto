@@ -18,11 +18,7 @@ module "vercel_domains" {
 module "dns" {
   source = "../../modules/dns"
 
-  zone_id                  = var.cloudflare_zone_id
-  vercel_domains           = var.vercel_domains
+  dns_records = local.vercel_dns_records
+  zone_id     = var.cloudflare_zone_id
   verification_dns_records = var.verification_dns_records
-
-  # A Vercel project must know a hostname before its DNS record can be
-  # validated. Keep this ordering explicit for first-time domain onboarding.
-  depends_on = [module.vercel_domains]
 }

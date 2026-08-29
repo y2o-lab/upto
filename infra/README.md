@@ -1,6 +1,6 @@
 # Upto infrastructure as code
 
-Vercel 上の Upto Web project、GitHub 連携、カスタムドメイン紐付けと、Cloudflare DNS の Vercel 向け CNAME/TXT レコードを Terraform で管理する。`apps/web` は Next.js/pnpm workspace として設定し、GitHub への push で Vercel が deployment を作成する。
+Vercel上のUpto Web project、GitHub連携、カスタムドメイン紐付けと、Cloudflare DNSのVercel向けA/CNAME/TXT recordをTerraformで管理する。`apps/web`はNext.js/pnpm workspaceとして設定し、GitHubへのpushでVercelがdeploymentを作成する。
 
 Terraform state は、別リポジトリで管理する Cloudflare R2 bucket の S3-compatible backend に保存する。このリポジトリは bucket 自体を作成・削除しない。
 
@@ -11,7 +11,7 @@ infra/
 ├── environments/
 │   └── production/            # R2 remote state を使う本体 root module
 └── modules/
-    ├── dns/                   # Cloudflare DNS CNAME/TXT
+    ├── dns/                   # Cloudflare DNS A/CNAME/TXT
     ├── vercel-domains/        # Vercel project への domain association
     └── vercel-project/        # apps/web のVercel projectとGitHub連携
 ```
@@ -32,4 +32,4 @@ terraform -chdir=infra/environments/production init
 terraform -chdir=infra/environments/production plan
 ```
 
-`backend.tf` は R2 backend の非secret設定を管理する。`terraform.tfvars`、state file は `.gitignore` 済みである。API token、R2 Access Key ID、R2 Secret Access Key、Vercel token を tfvars やリポジトリへ保存してはならない。
+`variables.tf`はproduction固有の非secret設定を、`backend.tf`はR2 backendの非secret設定を管理する。Vercelが推奨するDNS targetは`vercel_domain_config`から取得する。`terraform.tfvars`、state fileは`.gitignore`済みである。API token、R2 Access Key ID、R2 Secret Access Key、Vercel tokenをtfvarsやリポジトリへ保存してはならない。

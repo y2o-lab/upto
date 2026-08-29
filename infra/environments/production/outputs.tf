@@ -9,6 +9,6 @@ output "managed_vercel_domains" {
 }
 
 output "managed_cloudflare_dns_record_ids" {
-  description = "Cloudflare DNS record IDs for the Vercel CNAME and verification records."
+  description = "Cloudflare DNS record IDs for Vercel routing and verification records."
   value       = module.dns.record_ids
 }
