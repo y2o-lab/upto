@@ -2,12 +2,14 @@ name: Terraform
 
 on:
   pull_request:
+    branches:
+      - release-infra
     paths:
       - ".github/workflows/terraform.yml"
       - "infra/**"
   push:
     branches:
-      - main
+      - release-infra
     paths:
       - ".github/workflows/terraform.yml"
       - "infra/**"
@@ -28,9 +30,6 @@ permissions:
 env:
   TF_IN_AUTOMATION: "true"
   TF_INPUT: "false"
-  TF_STATE_BUCKET_NAME: ${{ vars.TF_STATE_BUCKET_NAME }}
-  TF_STATE_KEY: "upto/production/terraform.tfstate"
-  CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
   TF_VAR_cloudflare_zone_id: ${{ vars.TF_CLOUDFLARE_ZONE_ID }}
   TF_VAR_vercel_project_name: ${{ vars.TF_VERCEL_PROJECT_NAME }}
   TF_VAR_vercel_team_id: ${{ vars.TF_VERCEL_TEAM_ID }}
@@ -64,12 +63,13 @@ jobs:
   plan:
     name: Plan production
     needs: validate
-    # Do not expose infrastructure credentials to PR-controlled workflow code.
-    # Review pull requests with fmt/validate and a local plan; GitHub plans run
-    # only after a trusted main merge or by a reviewed manual dispatch.
+    # Fork pull requests run validation only. Plans with production credentials
+    # are restricted to reviewed, same-repository pull requests and release-infra.
     if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+      (github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/release-infra') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/release-infra')
     runs-on: ubuntu-latest
     environment: terraform-production
     env:
@@ -86,29 +86,6 @@ jobs:
         with:
           terraform_version: "1.11.4"
 
-      - name: Create the R2 backend configuration
-        working-directory: infra/environments/production
-        run: |
-          cat > backend.tf <<EOF
-          terraform {
-            backend "s3" {
-              bucket = "${TF_STATE_BUCKET_NAME}"
-              key    = "${TF_STATE_KEY}"
-              region = "auto"
-              endpoints = {
-                s3 = "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
-              }
-              skip_credentials_validation = true
-              skip_metadata_api_check     = true
-              skip_region_validation      = true
-              skip_requesting_account_id  = true
-              skip_s3_checksum            = true
-              use_path_style              = true
-              use_lockfile                = true
-            }
-          }
-          EOF
-
       - name: Initialize remote state
         run: terraform -chdir=infra/environments/production init
 
@@ -119,8 +96,8 @@ jobs:
     name: Apply production
     needs: plan
     if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.operation == 'apply')
+      (github.event_name == 'push' && github.ref == 'refs/heads/release-infra') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/release-infra' && inputs.operation == 'apply')
     runs-on: ubuntu-latest
     environment: terraform-production
     concurrency:
@@ -139,29 +116,6 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.11.4"
-
-      - name: Create the R2 backend configuration
-        working-directory: infra/environments/production
-        run: |
-          cat > backend.tf <<EOF
-          terraform {
-            backend "s3" {
-              bucket = "${TF_STATE_BUCKET_NAME}"
-              key    = "${TF_STATE_KEY}"
-              region = "auto"
-              endpoints = {
-                s3 = "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
-              }
-              skip_credentials_validation = true
-              skip_metadata_api_check     = true
-              skip_region_validation      = true
-              skip_requesting_account_id  = true
-              skip_s3_checksum            = true
-              use_path_style              = true
-              use_lockfile                = true
-            }
-          }
-          EOF
 
       - name: Initialize remote state
         run: terraform -chdir=infra/environments/production init

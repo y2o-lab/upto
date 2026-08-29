@@ -36,7 +36,7 @@ export AWS_ACCESS_KEY_ID='<r2-access-key-id>'
 export AWS_SECRET_ACCESS_KEY='<r2-secret-access-key>'
 ```
 
-`infra/environments/production/backend.tf` は空ファイルとして Git 管理します。CI は GitHub Variables から実行時に R2 backend 定義をこのファイルへ生成します。ローカル実行では、R2 state を管理する別リポジトリの手順に従って同じ backend 定義を一時注入してから、`terraform -chdir=infra/environments/production init` を実行します。backend 内の `use_lockfile = true` により、同時実行時は R2 上の lock file を使います。
+`infra/environments/production/backend.tf` は Git 管理し、R2 bucket、state key、Account IDを含むS3-compatible endpointなどの非secret設定を定義します。Access Key IDとSecret Access Keyは絶対にこのファイルへ書かず、ローカルではshell環境変数、CIではGitHub Environment Secretsから注入します。backend 内の `use_lockfile = true` により、同時実行時は R2 上のlock fileを使います。
 
 ## 2. Terraform input を準備する
 
@@ -108,8 +108,6 @@ repository の **Variables** に次を設定します。secret ではありま�
 
 | Variable | 値 |
 | --- | --- |
-| `TF_STATE_BUCKET_NAME` | R2 state bucket 名 |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
 | `TF_CLOUDFLARE_ZONE_ID` | Cloudflare zone ID |
 | `TF_VERCEL_PROJECT_NAME` | Vercel project 名 |
 | `TF_VERCEL_TEAM_ID` | team ID（personal account は空） |
@@ -120,9 +118,9 @@ repository の **Variables** に次を設定します。secret ではありま�
 
 workflow は次の動作をします。
 
-1. `infra/**` の PR で `fmt` と `validate` を実行します。PR が変更できる workflow へ infrastructure credential を渡さないため、CI の remote-state plan は実行しません。review 前の plan はローカルで実行して提示します。
-2. `main` へ Terraform 変更を merge すると、`terraform-production` environment approval の後に production plan と apply を実行します。main branch は pull request review と status check を必須に保護してください。
-3. 必要時は `main` を選んで Actions の **Terraform** workflow を手動実行し、`plan` または `apply` を選べます。main 以外の ref では credential を使う job は実行されません。apply は同じ production approval を要求します。
+1. `release-infra` 宛ての `infra/**` の PR では `fmt` と `validate` を実行します。
+2. `release-infra` 宛ての同一repositoryからの pull request では、`terraform-production` environment approval の後に production plan を実行します。fork からの pull request は credential を使わず、fmt/validate のみ実行します。`release-infra` branch は pull request review と status check を必須に保護してください。
+3. `release-infra` へ Terraform 変更を merge すると、production plan の成功後に apply を実行します。必要時は `release-infra` を選んで Actions の **Terraform** workflow を手動実行し、`plan` または `apply` を選べます。ほかの ref では credential を使う job は実行されません。apply は同じ production approval を要求します。
 
 state と production apply が同時に走らないよう、apply job は GitHub Actions concurrency と Terraform S3 lock file の二重で保護されています。
 

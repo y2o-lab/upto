@@ -32,4 +32,4 @@ terraform -chdir=infra/environments/production init
 terraform -chdir=infra/environments/production plan
 ```
 
-`backend.tf` は CI が実行時に backend 定義を注入するための空ファイルである。ローカル実行時の backend 定義は state bucket を管理する別リポジトリの手順で一時注入する。`terraform.tfvars`、state file は `.gitignore` 済みである。API token、R2 access key、Vercel token を tfvars やリポジトリへ保存してはならない。
+`backend.tf` は R2 backend の非secret設定を管理する。`terraform.tfvars`、state file は `.gitignore` 済みである。API token、R2 Access Key ID、R2 Secret Access Key、Vercel token を tfvars やリポジトリへ保存してはならない。
