@@ -18,7 +18,7 @@ module "vercel_domains" {
 module "dns" {
   source = "../../modules/dns"
 
-  dns_records = local.vercel_dns_records
-  zone_id     = var.cloudflare_zone_id
+  dns_records              = local.vercel_dns_records
+  zone_id                  = var.cloudflare_zone_id
   verification_dns_records = var.verification_dns_records
 }
