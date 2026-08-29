@@ -2,13 +2,12 @@
 
 Vercel 上の Upto Web project、GitHub 連携、カスタムドメイン紐付けと、Cloudflare DNS の Vercel 向け CNAME/TXT レコードを Terraform で管理する。`apps/web` は Next.js/pnpm workspace として設定し、GitHub への push で Vercel が deployment を作成する。
 
-Terraform state は Cloudflare R2 の S3-compatible backend に保存する。state bucket 自体は bootstrap root module で一度だけ作成するため、bootstrap と production root module の state を分けている。
+Terraform state は、別リポジトリで管理する Cloudflare R2 bucket の S3-compatible backend に保存する。このリポジトリは bucket 自体を作成・削除しない。
 
 ## Layout
 
 ```text
 infra/
-├── bootstrap/                 # R2 state bucket を一度だけ作成（local state）
 ├── environments/
 │   └── production/            # R2 remote state を使う本体 root module
 └── modules/
@@ -29,8 +28,8 @@ infra/
 
 ```bash
 terraform -chdir=infra fmt -check -recursive
-terraform -chdir=infra/environments/production init -backend-config=backend.hcl
+terraform -chdir=infra/environments/production init
 terraform -chdir=infra/environments/production plan
 ```
 
-`backend.hcl`、`terraform.tfvars`、state file は `.gitignore` 済みである。API token、R2 access key、Vercel token を tfvars やリポジトリへ保存してはならない。
+`backend.tf` は CI が実行時に backend 定義を注入するための空ファイルである。ローカル実行時の backend 定義は state bucket を管理する別リポジトリの手順で一時注入する。`terraform.tfvars`、state file は `.gitignore` 済みである。API token、R2 access key、Vercel token を tfvars やリポジトリへ保存してはならない。

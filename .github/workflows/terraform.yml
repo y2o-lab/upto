@@ -61,12 +61,6 @@ jobs:
       - name: Validate production configuration
         run: terraform -chdir=infra/environments/production validate
 
-      - name: Initialize bootstrap providers without state access
-        run: terraform -chdir=infra/bootstrap init -backend=false
-
-      - name: Validate bootstrap configuration
-        run: terraform -chdir=infra/bootstrap validate
-
   plan:
     name: Plan production
     needs: validate
@@ -95,24 +89,28 @@ jobs:
       - name: Create the R2 backend configuration
         working-directory: infra/environments/production
         run: |
-          cat > backend.hcl <<EOF
-          bucket = "${TF_STATE_BUCKET_NAME}"
-          key    = "${TF_STATE_KEY}"
-          region = "auto"
-          endpoints = {
-            s3 = "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          cat > backend.tf <<EOF
+          terraform {
+            backend "s3" {
+              bucket = "${TF_STATE_BUCKET_NAME}"
+              key    = "${TF_STATE_KEY}"
+              region = "auto"
+              endpoints = {
+                s3 = "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
+              }
+              skip_credentials_validation = true
+              skip_metadata_api_check     = true
+              skip_region_validation      = true
+              skip_requesting_account_id  = true
+              skip_s3_checksum            = true
+              use_path_style              = true
+              use_lockfile                = true
+            }
           }
-          skip_credentials_validation = true
-          skip_metadata_api_check     = true
-          skip_region_validation      = true
-          skip_requesting_account_id  = true
-          skip_s3_checksum            = true
-          use_path_style              = true
-          use_lockfile                = true
           EOF
 
       - name: Initialize remote state
-        run: terraform -chdir=infra/environments/production init -backend-config=backend.hcl
+        run: terraform -chdir=infra/environments/production init
 
       - name: Plan
         run: terraform -chdir=infra/environments/production plan -no-color
@@ -145,24 +143,28 @@ jobs:
       - name: Create the R2 backend configuration
         working-directory: infra/environments/production
         run: |
-          cat > backend.hcl <<EOF
-          bucket = "${TF_STATE_BUCKET_NAME}"
-          key    = "${TF_STATE_KEY}"
-          region = "auto"
-          endpoints = {
-            s3 = "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          cat > backend.tf <<EOF
+          terraform {
+            backend "s3" {
+              bucket = "${TF_STATE_BUCKET_NAME}"
+              key    = "${TF_STATE_KEY}"
+              region = "auto"
+              endpoints = {
+                s3 = "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
+              }
+              skip_credentials_validation = true
+              skip_metadata_api_check     = true
+              skip_region_validation      = true
+              skip_requesting_account_id  = true
+              skip_s3_checksum            = true
+              use_path_style              = true
+              use_lockfile                = true
+            }
           }
-          skip_credentials_validation = true
-          skip_metadata_api_check     = true
-          skip_region_validation      = true
-          skip_requesting_account_id  = true
-          skip_s3_checksum            = true
-          use_path_style              = true
-          use_lockfile                = true
           EOF
 
       - name: Initialize remote state
-        run: terraform -chdir=infra/environments/production init -backend-config=backend.hcl
+        run: terraform -chdir=infra/environments/production init
 
       - name: Apply
         run: terraform -chdir=infra/environments/production apply -auto-approve -no-color

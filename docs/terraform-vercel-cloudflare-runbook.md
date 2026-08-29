@@ -19,43 +19,24 @@
 ## 事前準備
 
 1. ローカルに Terraform 1.10 以上をインストールします。CI は 1.11.4 を使用します。
-2. Cloudflare で、bootstrap 用 API token を作成します。対象 account に **Workers R2 Storage: Edit** だけを付けます。bootstrap 後はこの token を失効または厳重保管します。
-3. Cloudflare R2 の **S3 API token** を作成します。production state bucket だけに絞り、Object Read & Write 権限を付与します。表示される Access Key ID と Secret Access Key はこの時しか取得できません。
-4. Cloudflare の通常運用 API token を作成します。対象 zone の **Zone: Read** と **DNS: Edit** のみを付けます。Global API Key は使いません。
-5. Vercel の API token を作成します。対象team/projectを操作できるtokenに限定します。team projectの場合はTeam Settingsでteam IDも控えます。
-6. VercelのGitHub integrationを対象repositoryへinstallします。TerraformがGitHub repositoryをprojectへ接続するには、このintegrationが必要です。
-7. Vercel project名、GitHub repository名、Cloudflare account ID/zone ID、現在のVercel custom domain、各CNAME targetとCloudflare DNS record IDを控えます。CNAME targetは固定値と決め打ちせず、Vercelのdomain画面または`vercel domains inspect <domain>`が示す値を使います。
+2. 別リポジトリで管理されている Cloudflare R2 state bucket、R2 S3 API token、および Access Key ID / Secret Access Key を準備します。このリポジトリは bucket を作成・削除しません。S3 API token は production state bucket だけに絞り、Object Read & Write 権限を付与します。
+3. Cloudflare の通常運用 API token を作成します。対象 zone の **Zone: Read** と **DNS: Edit** のみを付けます。Global API Key は使いません。
+4. Vercel の API token を作成します。対象team/projectを操作できるtokenに限定します。team projectの場合はTeam Settingsでteam IDも控えます。
+5. VercelのGitHub integrationを対象repositoryへinstallします。TerraformがGitHub repositoryをprojectへ接続するには、このintegrationが必要です。
+6. Vercel project名、GitHub repository名、Cloudflare account ID/zone ID、現在のVercel custom domain、各CNAME targetとCloudflare DNS record IDを控えます。CNAME targetは固定値と決め打ちせず、Vercelのdomain画面または`vercel domains inspect <domain>`が示す値を使います。
 
 Cloudflare が authoritative DNS の場合、Vercel 側で DNS record を作成しません。Vercel domain を先に登録し、その後 Cloudflare に DNS-only CNAME を作成します。Vercel の TLS 発行・更新を妨げないよう、`proxied = false` を維持してください。
 
-## 1. R2 backend を bootstrap する（初回のみ）
+## 1. R2 backend を接続する
 
-以下はローカル state を使う唯一の手順です。実行ディレクトリ内に state file ができるため、終了後も削除せず、暗号化された端末・アクセス制限した保管場所で保持してください。`prevent_destroy` があるため、bootstrap root module で `destroy` は実行しません。
-
-```bash
-export CLOUDFLARE_API_TOKEN='<bootstrap-token>'
-cp infra/bootstrap/terraform.tfvars.example infra/bootstrap/terraform.tfvars
-# terraform.tfvars の Cloudflare account ID と、専用 state bucket 名を編集する
-terraform -chdir=infra/bootstrap init
-terraform -chdir=infra/bootstrap plan
-terraform -chdir=infra/bootstrap apply
-```
-
-R2 bucket 作成後、手順 3 の R2 S3 API credentials を次の環境変数へ設定します。Object Read & Write 権限には state の読み書きに加え、`*.tflock` lock object の作成・削除が含まれている必要があります。シェル履歴に値を残さず、password manager や CI secret store から注入してください。
+別リポジトリで管理された R2 bucket の S3 API credentials を次の環境変数へ設定します。Object Read & Write 権限には state の読み書きに加え、`*.tflock` lock object の作成・削除が含まれている必要があります。シェル履歴に値を残さず、password manager や CI secret store から注入してください。
 
 ```bash
 export AWS_ACCESS_KEY_ID='<r2-access-key-id>'
 export AWS_SECRET_ACCESS_KEY='<r2-secret-access-key>'
 ```
 
-次に backend file を作成します。値は secret ではありませんが、環境ごとに異なるため Git 管理しません。
-
-```bash
-cp infra/environments/production/backend.hcl.example infra/environments/production/backend.hcl
-# bucket と account ID を編集する
-```
-
-`terraform -chdir=infra/environments/production init -backend-config=backend.hcl` を実行して、production root module を R2 backend へ初期化します。backend 内の `use_lockfile = true` により、同時実行時は R2 上の lock file を使います。
+`infra/environments/production/backend.tf` は空ファイルとして Git 管理します。CI は GitHub Variables から実行時に R2 backend 定義をこのファイルへ生成します。ローカル実行では、R2 state を管理する別リポジトリの手順に従って同じ backend 定義を一時注入してから、`terraform -chdir=infra/environments/production init` を実行します。backend 内の `use_lockfile = true` により、同時実行時は R2 上の lock file を使います。
 
 ## 2. Terraform input を準備する
 
