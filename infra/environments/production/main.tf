@@ -5,6 +5,7 @@ module "vercel_project" {
   vercel_team_id    = var.vercel_team_id
   git_repository    = var.vercel_git_repository
   production_branch = var.vercel_production_branch
+  preview_branch    = var.vercel_preview_branch
 }
 
 module "vercel_domains" {
