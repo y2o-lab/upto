@@ -32,13 +32,24 @@ variable "vercel_git_repository" {
 }
 
 variable "vercel_production_branch" {
-  description = "Git branch that creates production deployments. Other branches create preview deployments."
+  description = "Git branch that creates Production deployments."
   type        = string
   default     = "release"
 
   validation {
     condition     = length(trimspace(var.vercel_production_branch)) > 0
     error_message = "vercel_production_branch must not be empty."
+  }
+}
+
+variable "vercel_preview_branch" {
+  description = "Git branch allowed to create Preview deployments when relevant web or package files change."
+  type        = string
+  default     = "test"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9][A-Za-z0-9._/-]*$", var.vercel_preview_branch))
+    error_message = "vercel_preview_branch must be a valid Git branch name without shell-special characters."
   }
 }
 
