@@ -16,7 +16,7 @@ infra/
     └── vercel-project/        # apps/web のVercel projectとGitHub連携
 ```
 
-`production` は `vercel_project` resource で `apps/web` のroot directory、Next.js framework、Node.js 24、GitHub repository、production branchを管理する。production branchへのpushはproduction deployment、それ以外のbranchへのpushはpreview deploymentを作成する。
+`production` は `vercel_project` resource で `apps/web` のroot directory、Next.js framework、Node.js 24、GitHub repository、production branchを管理する。`release` へのpushはproduction deploymentを作成する。Previewは`test`へのpushだけを対象とし、`apps/web/**`、`packages/**`、またはworkspace依存設定（root `package.json`、`pnpm-lock.yaml`、`pnpm-workspace.yaml`）に差分がある場合だけ作成する。ほかのbranchおよび対象外の差分ではbuildを中止する。
 
 `DATABASE_URL`などのruntime secretはTerraform stateに保存せず、Vercel projectのsecret storeで管理する。既存projectではTerraform import前に、新規projectではTerraform apply後かつ最初のGit push前に、[Supabase接続デプロイ手順書](../docs/supabase-deployment-runbook.md)に従って設定する。
 

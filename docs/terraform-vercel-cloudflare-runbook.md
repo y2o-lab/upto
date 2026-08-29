@@ -119,7 +119,7 @@ state と production apply が同時に走らないよう、apply job は GitHub
 2. production applyを承認します。新規projectの場合は、続けてproduction branchへpushして初回production deploymentを開始します。
 3. Cloudflare dashboardでA/CNAME/TXTがTerraform管理の値と一致し、Vercel向けA/CNAMEがDNS-onlyであることを確認します。
 4. Vercel Project > Domains で domain が `Valid Configuration` になり、HTTPS が有効であることを確認します。
-5. production branchへcommitをpushし、Vercelがproduction deploymentを作成することを確認します。別branchへのpushではpreview deploymentが作成されます。
+5. `release`へcommitをpushし、Vercelがproduction deploymentを作成することを確認します。`test`へ`apps/web/**`、`packages/**`、またはworkspace依存設定を変更するcommitをpushし、Preview deploymentが作成されることを確認します。ほかのbranch、または対象外の変更だけの`test` commitではbuildが中止されることを確認します。
 6. 実ドメインと `https://<domain>/api/articles?limit=1` を確認します。DB URL や token がresponse、Vercel log、Actions logに出ていないことも確認します。
 
 問題時はまずActionsのapplyを止め、`terraform plan`でstateと実環境の差分を確認します。DNSをTerraform外で手修正してすぐにapplyするのは避けます。Vercelの直前deploymentへのrollbackはVercel dashboardで行えますが、DNS/domainを戻す場合は、このリポジトリの`variables.tf`を前の意図した値へ戻し、review済みのplanをapplyしてください。R2 state bucketとstate objectは削除しません。
