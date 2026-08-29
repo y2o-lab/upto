@@ -1,0 +1,168 @@
+name: Terraform
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/terraform.yml"
+      - "infra/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/terraform.yml"
+      - "infra/**"
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Operation to run against production infrastructure"
+        required: true
+        default: plan
+        type: choice
+        options:
+          - plan
+          - apply
+
+permissions:
+  contents: read
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TF_STATE_BUCKET_NAME: ${{ vars.TF_STATE_BUCKET_NAME }}
+  TF_STATE_KEY: "upto/production/terraform.tfstate"
+  CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+  TF_VAR_cloudflare_zone_id: ${{ vars.TF_CLOUDFLARE_ZONE_ID }}
+  TF_VAR_vercel_project_name: ${{ vars.TF_VERCEL_PROJECT_NAME }}
+  TF_VAR_vercel_team_id: ${{ vars.TF_VERCEL_TEAM_ID }}
+  TF_VAR_vercel_git_repository: ${{ vars.TF_VERCEL_GIT_REPOSITORY }}
+  TF_VAR_vercel_production_branch: ${{ vars.TF_VERCEL_PRODUCTION_BRANCH }}
+  TF_VAR_vercel_domains: ${{ vars.TF_VERCEL_DOMAINS_JSON }}
+  TF_VAR_verification_dns_records: ${{ vars.TF_VERIFICATION_DNS_RECORDS_JSON || '{}' }}
+
+jobs:
+  validate:
+    name: Format and validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.11.4"
+
+      - name: Check formatting
+        run: terraform -chdir=infra fmt -check -recursive
+
+      - name: Initialize production providers without state access
+        run: terraform -chdir=infra/environments/production init -backend=false
+
+      - name: Validate production configuration
+        run: terraform -chdir=infra/environments/production validate
+
+      - name: Initialize bootstrap providers without state access
+        run: terraform -chdir=infra/bootstrap init -backend=false
+
+      - name: Validate bootstrap configuration
+        run: terraform -chdir=infra/bootstrap validate
+
+  plan:
+    name: Plan production
+    needs: validate
+    # Do not expose infrastructure credentials to PR-controlled workflow code.
+    # Review pull requests with fmt/validate and a local plan; GitHub plans run
+    # only after a trusted main merge or by a reviewed manual dispatch.
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    environment: terraform-production
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.TF_R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_R2_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      VERCEL_API_TOKEN: ${{ secrets.VERCEL_API_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.11.4"
+
+      - name: Create the R2 backend configuration
+        working-directory: infra/environments/production
+        run: |
+          cat > backend.hcl <<EOF
+          bucket = "${TF_STATE_BUCKET_NAME}"
+          key    = "${TF_STATE_KEY}"
+          region = "auto"
+          endpoints = {
+            s3 = "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          }
+          skip_credentials_validation = true
+          skip_metadata_api_check     = true
+          skip_region_validation      = true
+          skip_requesting_account_id  = true
+          skip_s3_checksum            = true
+          use_path_style              = true
+          use_lockfile                = true
+          EOF
+
+      - name: Initialize remote state
+        run: terraform -chdir=infra/environments/production init -backend-config=backend.hcl
+
+      - name: Plan
+        run: terraform -chdir=infra/environments/production plan -no-color
+
+  apply:
+    name: Apply production
+    needs: plan
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.operation == 'apply')
+    runs-on: ubuntu-latest
+    environment: terraform-production
+    concurrency:
+      group: terraform-production
+      cancel-in-progress: false
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.TF_R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_R2_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      VERCEL_API_TOKEN: ${{ secrets.VERCEL_API_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.11.4"
+
+      - name: Create the R2 backend configuration
+        working-directory: infra/environments/production
+        run: |
+          cat > backend.hcl <<EOF
+          bucket = "${TF_STATE_BUCKET_NAME}"
+          key    = "${TF_STATE_KEY}"
+          region = "auto"
+          endpoints = {
+            s3 = "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          }
+          skip_credentials_validation = true
+          skip_metadata_api_check     = true
+          skip_region_validation      = true
+          skip_requesting_account_id  = true
+          skip_s3_checksum            = true
+          use_path_style              = true
+          use_lockfile                = true
+          EOF
+
+      - name: Initialize remote state
+        run: terraform -chdir=infra/environments/production init -backend-config=backend.hcl
+
+      - name: Apply
+        run: terraform -chdir=infra/environments/production apply -auto-approve -no-color

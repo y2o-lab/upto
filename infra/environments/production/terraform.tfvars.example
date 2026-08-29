@@ -1,0 +1,26 @@
+# Non-secret values only. Copy to terraform.tfvars locally; that file is ignored.
+cloudflare_zone_id  = "<cloudflare-zone-id>"
+vercel_project_name = "upto"
+vercel_team_id      = "<team-id-or-empty-for-personal-account>"
+vercel_git_repository = "y2o-lab/upto"
+vercel_production_branch = "main"
+
+# Use the exact target Vercel displays for each domain. Keep proxied=false:
+# Vercel must receive the hostname directly while issuing and renewing TLS.
+vercel_domains = {
+  "app.example.com" = {
+    cname_record_name = "app"
+    cname_target      = "cname.vercel-dns.com"
+    ttl               = 1
+    proxied           = false
+  }
+}
+
+# Add these only if Vercel's domain screen requests ownership verification.
+verification_dns_records = {
+  # "_vercel.app.example.com" = {
+  #   name    = "_vercel.app"
+  #   content = "vc-domain-verify=app.example.com,<verification-token>"
+  #   ttl     = 1
+  # }
+}

@@ -1,0 +1,3 @@
+# Non-secret values only. Copy to terraform.tfvars locally; that file is ignored.
+cloudflare_account_id = "<cloudflare-account-id>"
+state_bucket_name     = "upto-terraform-state"
