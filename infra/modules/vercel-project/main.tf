@@ -9,9 +9,13 @@ resource "vercel_project" "web" {
   root_directory = "apps/web"
   build_command  = "cd ../.. && pnpm --filter @upto/web build"
 
-  auto_assign_custom_domains           = true
-  enable_affected_projects_deployments = true
-  git_fork_protection                  = true
+  auto_assign_custom_domains                        = true
+  automatically_expose_system_environment_variables = true
+  enable_affected_projects_deployments              = true
+  git_fork_protection                               = true
+  # Vercel invokes this from apps/web. The script limits previews to the
+  # configured branch and skips builds without web or workspace-package changes.
+  ignore_command = "UPTO_VERCEL_PREVIEW_BRANCH=${var.preview_branch} bash ../../infra/scripts/vercel-ignore-build.sh"
 
   git_repository = {
     type              = "github"

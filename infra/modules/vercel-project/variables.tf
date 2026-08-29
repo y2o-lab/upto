@@ -14,6 +14,16 @@ variable "git_repository" {
 }
 
 variable "production_branch" {
-  description = "Git branch Vercel deploys to production. Other branches create preview deployments."
+  description = "Git branch Vercel deploys to production."
   type        = string
+}
+
+variable "preview_branch" {
+  description = "The only Git branch permitted to create Vercel preview deployments."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9][A-Za-z0-9._/-]*$", var.preview_branch))
+    error_message = "preview_branch must be a valid Git branch name without shell-special characters."
+  }
 }
