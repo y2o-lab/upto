@@ -17,7 +17,7 @@
     "typecheck": "tsc -b --noEmit tsconfig.json"
   },
   "dependencies": {
-    "@upto/domain": "workspace:*",
+    "@upto/domain": "workspace:0.1.0",
     "drizzle-orm": "0.45.2",
     "pg": "8.21.0"
   },

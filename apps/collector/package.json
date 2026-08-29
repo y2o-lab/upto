@@ -4,24 +4,30 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json --noEmit false",
+    "build": "pnpm --dir ../.. exec tsc -p apps/collector/tsconfig.json --noEmit false",
     "dev": "COLLECTOR_DRY_RUN=true tsx watch src/index.ts",
     "start": "node dist/index.js",
     "test": "vitest run --root ../.. apps/collector/src",
-    "typecheck": "tsc -b tsconfig.json"
+    "trigger:deploy:dry-run": "trigger deploy --config trigger.config.ts --builder trigger-host --network host --dry-run --skip-update-check --skip-telemetry",
+    "trigger:deploy:prod": "trigger deploy --config trigger.config.ts --builder trigger-host --network host --env prod --skip-update-check --skip-telemetry",
+    "trigger:deploy:staging": "trigger deploy --config trigger.config.ts --builder trigger-host --network host --env staging --skip-update-check --skip-telemetry",
+    "trigger:dev": "trigger dev --config trigger.config.ts --skip-update-check --skip-telemetry",
+    "typecheck": "pnpm --dir ../.. exec tsc -b apps/collector/tsconfig.json"
   },
   "dependencies": {
-    "@google/genai": "2.8.0",
+    "@google/genai": "2.17.1",
     "@mozilla/readability": "0.6.0",
-    "@trigger.dev/sdk": "4.4.6",
-    "@upto/db": "workspace:*",
-    "@upto/domain": "workspace:*",
-    "fast-xml-parser": "5.8.0",
-    "jsdom": "29.1.1",
-    "p-limit": "7.3.0",
+    "@trigger.dev/sdk": "4.5.11",
+    "@upto/db": "workspace:0.1.0",
+    "@upto/domain": "workspace:0.1.0",
+    "fast-xml-parser": "5.11.0",
+    "jsdom": "30.0.1",
+    "p-limit": "7.3.1",
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "@types/jsdom": "28.0.3"
+    "@types/jsdom": "30.0.0",
+    "trigger.dev": "4.5.11",
+    "typescript": "5.9.3"
   }
 }

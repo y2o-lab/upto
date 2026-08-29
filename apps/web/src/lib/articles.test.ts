@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getArticlesPage, mapArticleRow } from "./articles";
+import { getArticlesByIds, getArticlesPage, mapArticleRow } from "./articles";
 
 describe("mapArticleRow", () => {
   it("maps DB rows and snake_case summary JSON into feed articles", () => {
@@ -133,5 +133,21 @@ describe("getArticlesPage", () => {
     await expect(getArticlesPage({ limit: 2, snapshotAt: "not-a-date" })).rejects.toThrow(
       "Invalid article page snapshot",
     );
+  });
+});
+
+describe("getArticlesByIds", () => {
+  it("returns fixture articles in the same order as the saved article IDs", async () => {
+    process.env.UPTO_WEB_USE_FIXTURE_DATA = "true";
+
+    const articles = await getArticlesByIds([
+      "00000000-0000-4000-8000-000000000002",
+      "00000000-0000-4000-8000-000000000001",
+    ]);
+
+    expect(articles.map((article) => article.id)).toEqual([
+      "00000000-0000-4000-8000-000000000002",
+      "00000000-0000-4000-8000-000000000001",
+    ]);
   });
 });

@@ -2,16 +2,51 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GET } from "./route";
 
-const getArticlesPageMock = vi.hoisted(() => vi.fn());
+const { getArticlesByIdsMock, getArticlesPageMock } = vi.hoisted(() => ({
+  getArticlesByIdsMock: vi.fn(),
+  getArticlesPageMock: vi.fn(),
+}));
 
 vi.mock("../../../lib/articles", () => ({
+  getArticlesByIds: getArticlesByIdsMock,
   getArticlesPage: getArticlesPageMock,
 }));
 
 describe("GET /api/articles", () => {
   afterEach(() => {
     getArticlesPageMock.mockReset();
+    getArticlesByIdsMock.mockReset();
     vi.restoreAllMocks();
+  });
+
+  it("returns the requested saved articles", async () => {
+    const articleIds = [
+      "00000000-0000-4000-8000-000000000001",
+      "00000000-0000-4000-8000-000000000002",
+    ];
+    getArticlesByIdsMock.mockResolvedValueOnce([{ id: articleIds[0] }]);
+
+    const response = await GET(
+      new Request(`http://localhost/api/articles?ids=${articleIds.join(",")}`),
+    );
+
+    await expect(response.json()).resolves.toEqual({ articles: [{ id: articleIds[0] }] });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(getArticlesByIdsMock).toHaveBeenCalledWith(articleIds);
+    expect(getArticlesPageMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed saved article IDs", async () => {
+    const response = await GET(new Request("http://localhost/api/articles?ids=not-a-uuid"));
+
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: "invalid_request",
+      },
+    });
+    expect(response.status).toBe(400);
+    expect(getArticlesByIdsMock).not.toHaveBeenCalled();
   });
 
   it("returns invalid_request for invalid query parameters without calling article loading", async () => {

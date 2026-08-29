@@ -2,7 +2,7 @@ import { defineConfig } from "@trigger.dev/sdk";
 import { copyFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-// Trigger.dev 4.4.6 starts its managed index worker with only the project's
+// Trigger.dev starts its managed index worker with only the project's
 // runtime environment variables. It deliberately omits the CLI-only
 // TRIGGER_PROJECT_REF, even though it re-imports this config. The controller
 // already has the real project ref; the worker only needs a schema-valid value
@@ -11,8 +11,9 @@ const isManagedIndexWorker =
   process.env.TRIGGER_INDEXING === "1" &&
   typeof process.env.TRIGGER_BUILD_MANIFEST_PATH === "string";
 const project = process.env.TRIGGER_PROJECT_REF;
-const localCaRelativePath = "certs/inoue-coolify-local-ca.pem";
-const localCaContainerPath = `/app/${localCaRelativePath}`;
+const localCaImageRelativePath = "certs/inoue-coolify-local-ca.pem";
+const localCaSourceRelativePath = "../../certs/inoue-coolify-local-ca.pem";
+const localCaContainerPath = `/app/${localCaImageRelativePath}`;
 
 if (!project && !isManagedIndexWorker) {
   throw new Error("TRIGGER_PROJECT_REF is required for Trigger.dev commands.");
@@ -26,15 +27,15 @@ export default defineConfig({
     external: ["jsdom"],
     extensions: [
       {
-        name: "local-ca-for-trigger-4-4-6",
+        name: "local-ca-for-trigger",
         async onBuildComplete(context, manifest) {
           if (context.target !== "deploy") {
             return;
           }
 
-          const caOutputPath = join(manifest.outputPath, localCaRelativePath);
+          const caOutputPath = join(manifest.outputPath, localCaImageRelativePath);
           await mkdir(dirname(caOutputPath), { recursive: true });
-          await copyFile(join(context.workingDir, localCaRelativePath), caOutputPath);
+          await copyFile(join(context.workingDir, localCaSourceRelativePath), caOutputPath);
 
           context.addLayer({
             build: {
@@ -42,14 +43,14 @@ export default defineConfig({
                 NODE_EXTRA_CA_CERTS: localCaContainerPath,
               },
             },
-            id: "local-ca-for-trigger-4-4-6",
+            id: "local-ca-for-trigger",
           });
         },
       },
     ],
   },
-  dirs: ["./apps/collector/src/trigger"],
-  extraCACerts: "./certs/inoue-coolify-local-ca.pem",
+  dirs: ["./src/trigger"],
+  extraCACerts: "../../certs/inoue-coolify-local-ca.pem",
   runtime: "node-22",
   maxDuration: 7_200,
   project: project || "trigger-indexing-only",
@@ -63,5 +64,5 @@ export default defineConfig({
     },
     enabledInDev: false,
   },
-  tsconfig: "./apps/collector/tsconfig.json",
+  tsconfig: "./trigger.tsconfig.json",
 });
