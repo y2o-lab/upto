@@ -18,19 +18,19 @@
     "@vercel/analytics": "2.0.1",
     "@vercel/speed-insights": "2.0.0",
     "dexie": "4.4.5",
-    "next": "16.3.1",
+    "next": "16.3.3",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "@storybook/addon-docs": "10.5.9",
-    "@storybook/react-vite": "10.5.9",
+    "@storybook/addon-docs": "10.5.10",
+    "@storybook/react-vite": "10.5.10",
     "@tailwindcss/postcss": "4.3.3",
-    "@vitejs/plugin-react": "6.0.5",
+    "@vitejs/plugin-react": "6.1.0",
     "fake-indexeddb": "6.2.5",
-    "storybook": "10.5.9",
+    "storybook": "10.5.10",
     "tailwindcss": "4.3.3",
-    "vite": "8.2.1"
+    "vite": "8.2.2"
   }
 }
