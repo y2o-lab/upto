@@ -142,7 +142,7 @@ test("persists saved, progress, and theme state in IndexedDB", async ({ page }) 
         const [savedArticle, readingProgress, themeSetting] = await Promise.all([
           read<{ articleId: string; savedAt: string }>(
             "saved_articles",
-            "00000000-0000-4000-8000-000000000001",
+            "00000000-0000-4000-8000-000000000002",
           ),
           read<{ articleId: string; feedType: string; updatedAt: string }>(
             "reading_progress",
@@ -158,11 +158,11 @@ test("persists saved, progress, and theme state in IndexedDB", async ({ page }) 
     )
     .toMatchObject({
       readingProgress: {
-        articleId: "00000000-0000-4000-8000-000000000002",
+        articleId: "00000000-0000-4000-8000-000000000001",
         feedType: "home",
       },
       savedArticle: {
-        articleId: "00000000-0000-4000-8000-000000000001",
+        articleId: "00000000-0000-4000-8000-000000000002",
       },
       themeSetting: {
         key: "theme",
@@ -264,7 +264,7 @@ test("marks an article read after staying on it for three seconds", async ({ pag
               const transaction = db.transaction("read_articles", "readonly");
               const getRequest = transaction
                 .objectStore("read_articles")
-                .get("00000000-0000-4000-8000-000000000001");
+                .get("00000000-0000-4000-8000-000000000002");
               getRequest.onerror = () => reject(getRequest.error);
               getRequest.onsuccess = () => {
                 db.close();
@@ -277,7 +277,7 @@ test("marks an article read after staying on it for three seconds", async ({ pag
     .toBe(true);
 });
 
-test("shows unread articles before read articles while preserving the ranking within each group", async ({
+test("skips previously read articles and fills the feed with later unread candidates", async ({
   page,
 }) => {
   await page.goto("/");
@@ -298,28 +298,18 @@ test("shows unread articles before read articles while preserving the ranking wi
     "fixture pagination article 4",
   );
   await expect(page.locator("article[data-index='8'] h2")).toHaveText(
-    "Next.js で縦スワイプ型ニュース UI を作る",
-  );
-  await expect(page.locator("article[data-index='9'] h2")).toHaveText(
-    "fixture pagination article 3",
-  );
-
-  await page.locator("article[data-index='8']").scrollIntoViewIfNeeded();
-  await expect(page.locator("article[data-index='8'] h2")).toHaveText(
     "fixture pagination article 11",
   );
   await expect(page.locator("article[data-index='9'] h2")).toHaveText(
     "fixture pagination article 12",
   );
-  await expect(page.locator("article[data-index='10'] h2")).toHaveText(
-    "Next.js で縦スワイプ型ニュース UI を作る",
-  );
-  await expect(page.locator("article[data-index='11'] h2")).toHaveText(
-    "fixture pagination article 3",
-  );
+  await expect(
+    page.getByRole("heading", { name: "Next.js で縦スワイプ型ニュース UI を作る" }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "fixture pagination article 3" })).toHaveCount(0);
 });
 
-test("keeps the ranking order when every article is already read", async ({ page }) => {
+test("shows the completion state when every fetched article is already read", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByTestId("article-feed")).toHaveAttribute("data-ready", "true");
   await seedReadArticleIds(
@@ -331,22 +321,8 @@ test("keeps the ranking order when every article is already read", async ({ page
   );
 
   await page.reload();
-  await expect(page.getByTestId("article-feed")).toHaveAttribute("data-ready", "true");
-
-  await expect(page.locator("article[data-index='0'] h2")).toHaveText(
-    "Next.js で縦スワイプ型ニュース UI を作る",
-  );
-  await expect(page.locator("article[data-index='1'] h2")).toHaveText(
-    "ニュース収集バッチを安全に設計する",
-  );
-
-  await page.locator("article[data-index='8']").scrollIntoViewIfNeeded();
-  await expect(page.locator("article[data-index='10'] h2")).toHaveText(
-    "fixture pagination article 11",
-  );
-  await expect(page.locator("article[data-index='11'] h2")).toHaveText(
-    "fixture pagination article 12",
-  );
+  await expect(page.getByRole("heading", { name: "今日の新着は以上です" })).toBeVisible();
+  await expect(page.getByText("このフィードで未読の記事はすべて読み終えました。")).toBeVisible();
 });
 
 test("keeps article content inside the active card viewport", async ({ page }) => {

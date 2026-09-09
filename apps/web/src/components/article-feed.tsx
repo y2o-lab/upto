@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ArticlePage, FeedArticle } from "../lib/articles";
 
-import { prioritizeUnreadArticles } from "../lib/article-feed-order";
+import { excludeReadArticles } from "../lib/article-feed-order";
 import { logWarning } from "../lib/logging";
 import { useUserArticleState } from "../lib/use-user-article-state";
 import { markArticleRead, markArticleSaved, saveReadingProgress } from "../lib/user-state-db";
@@ -27,7 +27,8 @@ type ArticleFeedProps = {
 
 const wheelThreshold = 70;
 const wheelCooldownMs = 520;
-const loadMorePageSize = 10;
+const initialVisibleArticleCount = 10;
+const loadMorePageSize = 30;
 const maxProgressDots = 12;
 
 export function ArticleFeed({
@@ -53,9 +54,10 @@ export function ArticleFeed({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(initialCursor);
-  const [readArticleIdsForOrdering, setReadArticleIdsForOrdering] = useState<Set<string> | null>(
+  const [readArticleIdsForExclusion, setReadArticleIdsForExclusion] = useState<Set<string> | null>(
     null,
   );
+  const [visibleArticleCount, setVisibleArticleCount] = useState(initialVisibleArticleCount);
   const [snapshotAt, setSnapshotAt] = useState(effectiveInitialSnapshotAt);
   const containerRef = useRef<HTMLDivElement>(null);
   const isLoadingMoreRef = useRef(false);
@@ -72,17 +74,28 @@ export function ArticleFeed({
   );
   const articleIds = useMemo(() => feedArticles.map((article) => article.id), [feedArticles]);
   const userState = useUserArticleState(articleIds, feedType);
+  const unreadFeedArticles = useMemo(
+    () =>
+      feedType === "home" && readArticleIdsForExclusion
+        ? excludeReadArticles(feedArticles, readArticleIdsForExclusion)
+        : feedArticles,
+    [feedArticles, feedType, readArticleIdsForExclusion],
+  );
   const orderedFeedArticles = useMemo(
     () =>
-      feedType === "home" && readArticleIdsForOrdering
-        ? prioritizeUnreadArticles(feedArticles, readArticleIdsForOrdering)
+      feedType === "home"
+        ? readArticleIdsForExclusion
+          ? unreadFeedArticles.slice(0, visibleArticleCount)
+          : []
         : feedArticles,
-    [feedArticles, feedType, readArticleIdsForOrdering],
+    [feedArticles, feedType, readArticleIdsForExclusion, unreadFeedArticles, visibleArticleCount],
   );
-  const isFeedOrderReady = feedType !== "home" || readArticleIdsForOrdering !== null;
+  const hasBufferedUnreadArticles = unreadFeedArticles.length > orderedFeedArticles.length;
+  const hasMoreArticles = hasMore || hasBufferedUnreadArticles;
+  const isFeedOrderReady = feedType !== "home" || readArticleIdsForExclusion !== null;
   const activeArticle =
     activeIndex < orderedFeedArticles.length ? orderedFeedArticles[activeIndex] : null;
-  const hasTerminalCard = !hasMore;
+  const hasTerminalCard = !hasMoreArticles;
 
   useEffect(() => {
     setIsReady(true);
@@ -98,7 +111,8 @@ export function ArticleFeed({
     setActiveIndex(initialActiveIndex);
     setHasRestoredProgress(false);
     newlyReadArticleIdsRef.current.clear();
-    setReadArticleIdsForOrdering(null);
+    setReadArticleIdsForExclusion(null);
+    setVisibleArticleCount(initialVisibleArticleCount);
   }, [
     articles,
     initialActiveIndex,
@@ -114,7 +128,7 @@ export function ArticleFeed({
       return;
     }
 
-    setReadArticleIdsForOrdering(
+    setReadArticleIdsForExclusion(
       (currentArticleIds) =>
         currentArticleIds ??
         new Set(
@@ -136,7 +150,9 @@ export function ArticleFeed({
       }
 
       const maxIndex =
-        hasMore || hasTerminalCard ? orderedFeedArticles.length : orderedFeedArticles.length - 1;
+        hasMoreArticles || hasTerminalCard
+          ? orderedFeedArticles.length
+          : orderedFeedArticles.length - 1;
       const boundedIndex = Math.max(0, Math.min(nextIndex, maxIndex));
       const container = containerRef.current;
       const target = container?.children.item(boundedIndex);
@@ -154,7 +170,7 @@ export function ArticleFeed({
 
       container.scrollTo({ behavior, top });
     },
-    [hasMore, hasTerminalCard, orderedFeedArticles.length],
+    [hasMoreArticles, hasTerminalCard, orderedFeedArticles.length],
   );
 
   useEffect(() => {
@@ -206,7 +222,7 @@ export function ArticleFeed({
     );
     const shouldRestoreProgress =
       restoredIndex > 0 &&
-      !readArticleIdsForOrdering?.has(userState.readingProgressArticleId ?? "");
+      !readArticleIdsForExclusion?.has(userState.readingProgressArticleId ?? "");
     const nextIndex = shouldRestoreProgress ? restoredIndex : initialActiveIndex;
     window.requestAnimationFrame(() => {
       scrollToIndex(nextIndex, "auto");
@@ -217,7 +233,7 @@ export function ArticleFeed({
     initialActiveIndex,
     isFeedOrderReady,
     orderedFeedArticles,
-    readArticleIdsForOrdering,
+    readArticleIdsForExclusion,
     scrollToIndex,
     userState.isLoaded,
     userState.readingProgressArticleId,
@@ -344,15 +360,50 @@ export function ArticleFeed({
   }, [hasMore, loadMoreArticles, nextCursor, snapshotAt]);
 
   useEffect(() => {
-    if (activeIndex >= orderedFeedArticles.length - 2 && !loadMoreError) {
-      void loadMore();
+    if (
+      feedType !== "home" ||
+      !isFeedOrderReady ||
+      unreadFeedArticles.length >= visibleArticleCount ||
+      !hasMore ||
+      loadMoreError
+    ) {
+      return;
     }
-  }, [activeIndex, loadMore, loadMoreError, orderedFeedArticles.length]);
+
+    void loadMore();
+  }, [
+    feedType,
+    hasMore,
+    isFeedOrderReady,
+    loadMore,
+    loadMoreError,
+    unreadFeedArticles.length,
+    visibleArticleCount,
+  ]);
+
+  useEffect(() => {
+    if (
+      feedType !== "home" ||
+      orderedFeedArticles.length === 0 ||
+      activeIndex < orderedFeedArticles.length - 2 ||
+      !hasMoreArticles ||
+      loadMoreError
+    ) {
+      return;
+    }
+
+    setVisibleArticleCount((currentCount) =>
+      Math.max(currentCount, orderedFeedArticles.length + initialVisibleArticleCount),
+    );
+  }, [activeIndex, feedType, hasMoreArticles, loadMoreError, orderedFeedArticles.length]);
 
   async function moveForwardFromArticle(index: number) {
-    if (index === orderedFeedArticles.length - 1 && hasMore) {
-      const loaded = await loadMore();
-      scrollToIndex(loaded ? index + 1 : orderedFeedArticles.length);
+    if (index === orderedFeedArticles.length - 1 && hasMoreArticles) {
+      setVisibleArticleCount((currentCount) =>
+        Math.max(currentCount, orderedFeedArticles.length + initialVisibleArticleCount),
+      );
+      void loadMore();
+      scrollToIndex(index + 1);
       return;
     }
 
@@ -367,24 +418,30 @@ export function ArticleFeed({
 
   if (orderedFeedArticles.length === 0) {
     const isSavedFeed = emptyState === "saved";
+    const isPreparingHomeFeed =
+      feedType === "home" && (!isFeedOrderReady || hasMore || isLoadingMore);
     return (
       <section className="flex h-dvh flex-col overflow-hidden">
         <AppHeader activeIndex={0} articleCount={0} feedType={feedType} hasMore={false} />
         <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col justify-center px-4">
           <p className="text-sm font-medium text-[var(--accent)]">Upto</p>
           <h2 className="mt-3 text-3xl leading-tight font-semibold text-balance">
-            {isLoading
-              ? "保存した記事を読み込んでいます"
-              : loadError
-                ? "保存した記事を読み込めませんでした"
-                : isSavedFeed
-                  ? "保存した記事はありません"
-                  : "まだ表示できる記事がありません"}
+            {isPreparingHomeFeed
+              ? "未読の記事を準備しています"
+              : isLoading
+                ? "保存した記事を読み込んでいます"
+                : loadError
+                  ? "保存した記事を読み込めませんでした"
+                  : isSavedFeed
+                    ? "保存した記事はありません"
+                    : "今日の新着は以上です"}
           </h2>
           <p className="mt-5 max-w-xl leading-7 text-[var(--muted)]">
-            {isSavedFeed
-              ? "記事の☆を選択すると、あとでここからまとめて読めます。"
-              : "collector batch を実行して、要約済みの記事がDBへ保存されるとここに表示されます。本番環境ではデータベース接続設定を確認し、定期バッチを起動してください。"}
+            {isPreparingHomeFeed
+              ? "既読の記事を除外しながら、次に読む記事を探しています。"
+              : isSavedFeed
+                ? "記事の☆を選択すると、あとでここからまとめて読めます。"
+                : "このフィードで未読の記事はすべて読み終えました。"}
           </p>
           {loadError && onRetry ? (
             <button
@@ -406,7 +463,7 @@ export function ArticleFeed({
         activeIndex={activeIndex}
         articleCount={orderedFeedArticles.length}
         feedType={feedType}
-        hasMore={hasMore}
+        hasMore={hasMoreArticles}
       />
 
       <div
@@ -560,7 +617,7 @@ export function ArticleFeed({
                       type="button"
                     >
                       {index === orderedFeedArticles.length - 1
-                        ? hasMore
+                        ? hasMoreArticles
                           ? "追加記事を読む"
                           : "読み終える"
                         : "次の記事へ"}
@@ -588,7 +645,7 @@ export function ArticleFeed({
             </article>
           );
         })}
-        {hasMore ? (
+        {hasMoreArticles ? (
           <LoadMoreStatusCard
             index={orderedFeedArticles.length}
             isLoading={isLoadingMore}

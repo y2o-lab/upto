@@ -3,7 +3,7 @@
 import { liveQuery } from "dexie";
 import { useEffect, useMemo, useState } from "react";
 
-import { getUserStateDb } from "./user-state-db";
+import { getUserStateDb, pruneReadArticles } from "./user-state-db";
 
 export type UserArticleStateSnapshot = {
   isLoaded: boolean;
@@ -71,25 +71,40 @@ export function useUserArticleState(
     }
 
     const ids = articleIdsKey ? articleIdsKey.split("\u001f") : [];
-    const subscription = liveQuery(async () => {
-      const [savedArticles, readArticles, readingProgress] = await Promise.all([
-        ids.length > 0 ? db.savedArticles.where("articleId").anyOf(ids).toArray() : [],
-        db.readArticles.toArray(),
-        db.readingProgress.get(feedType),
-      ]);
+    let isCancelled = false;
+    let unsubscribe: (() => void) | undefined;
 
-      return {
-        isLoaded: true,
-        readArticleIds: new Set(readArticles.map((article) => article.articleId)),
-        readingProgressArticleId: readingProgress?.articleId ?? null,
-        savedArticleIds: new Set(savedArticles.map((article) => article.articleId)),
-      } satisfies UserArticleStateSnapshot;
-    }).subscribe({
-      error: () => setSnapshot({ ...emptySnapshot, isLoaded: true }),
-      next: setSnapshot,
-    });
+    void pruneReadArticles({}, db)
+      .then(() => {
+        if (isCancelled) {
+          return;
+        }
 
-    return () => subscription.unsubscribe();
+        const subscription = liveQuery(async () => {
+          const [savedArticles, readArticles, readingProgress] = await Promise.all([
+            ids.length > 0 ? db.savedArticles.where("articleId").anyOf(ids).toArray() : [],
+            db.readArticles.toArray(),
+            db.readingProgress.get(feedType),
+          ]);
+
+          return {
+            isLoaded: true,
+            readArticleIds: new Set(readArticles.map((article) => article.articleId)),
+            readingProgressArticleId: readingProgress?.articleId ?? null,
+            savedArticleIds: new Set(savedArticles.map((article) => article.articleId)),
+          } satisfies UserArticleStateSnapshot;
+        }).subscribe({
+          error: () => setSnapshot({ ...emptySnapshot, isLoaded: true }),
+          next: setSnapshot,
+        });
+        unsubscribe = () => subscription.unsubscribe();
+      })
+      .catch(() => setSnapshot({ ...emptySnapshot, isLoaded: true }));
+
+    return () => {
+      isCancelled = true;
+      unsubscribe?.();
+    };
   }, [articleIdsKey, feedType]);
 
   return snapshot;

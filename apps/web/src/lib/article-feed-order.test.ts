@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { prioritizeUnreadArticles } from "./article-feed-order";
+import { excludeReadArticles } from "./article-feed-order";
 
 type TestArticle = {
   id: string;
@@ -8,21 +8,21 @@ type TestArticle = {
 
 const articles = ["a", "b", "c", "d"].map((id) => ({ id })) satisfies TestArticle[];
 
-describe("prioritizeUnreadArticles", () => {
-  it("places unread articles before read articles without changing either group's order", () => {
-    const result = prioritizeUnreadArticles(articles, new Set(["a", "c"]));
+describe("excludeReadArticles", () => {
+  it("removes read articles without changing unread article order", () => {
+    const result = excludeReadArticles(articles, new Set(["a", "c"]));
 
-    expect(result.map((article) => article.id)).toEqual(["b", "d", "a", "c"]);
+    expect(result.map((article) => article.id)).toEqual(["b", "d"]);
   });
 
-  it("keeps the existing algorithm order when every article is read", () => {
-    const result = prioritizeUnreadArticles(articles, new Set(["a", "b", "c", "d"]));
+  it("returns an empty list when every article is read", () => {
+    const result = excludeReadArticles(articles, new Set(["a", "b", "c", "d"]));
 
-    expect(result.map((article) => article.id)).toEqual(["a", "b", "c", "d"]);
+    expect(result).toEqual([]);
   });
 
-  it("keeps the existing algorithm order when every article is unread", () => {
-    const result = prioritizeUnreadArticles(articles, new Set());
+  it("keeps the existing order when every article is unread", () => {
+    const result = excludeReadArticles(articles, new Set());
 
     expect(result.map((article) => article.id)).toEqual(["a", "b", "c", "d"]);
   });
