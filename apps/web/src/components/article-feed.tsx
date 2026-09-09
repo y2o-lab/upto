@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ArticlePage, FeedArticle } from "../lib/articles";
 
+import { prioritizeUnreadArticles } from "../lib/article-feed-order";
 import { logWarning } from "../lib/logging";
 import { useUserArticleState } from "../lib/use-user-article-state";
 import { markArticleRead, markArticleSaved, saveReadingProgress } from "../lib/user-state-db";
@@ -52,9 +53,13 @@ export function ArticleFeed({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(initialCursor);
+  const [readArticleIdsForOrdering, setReadArticleIdsForOrdering] = useState<Set<string> | null>(
+    null,
+  );
   const [snapshotAt, setSnapshotAt] = useState(effectiveInitialSnapshotAt);
   const containerRef = useRef<HTMLDivElement>(null);
   const isLoadingMoreRef = useRef(false);
+  const newlyReadArticleIdsRef = useRef(new Set<string>());
   const wheelRef = useRef({
     accumulatedDelta: 0,
     lastDirection: 0,
@@ -67,7 +72,16 @@ export function ArticleFeed({
   );
   const articleIds = useMemo(() => feedArticles.map((article) => article.id), [feedArticles]);
   const userState = useUserArticleState(articleIds, feedType);
-  const activeArticle = activeIndex < feedArticles.length ? feedArticles[activeIndex] : null;
+  const orderedFeedArticles = useMemo(
+    () =>
+      feedType === "home" && readArticleIdsForOrdering
+        ? prioritizeUnreadArticles(feedArticles, readArticleIdsForOrdering)
+        : feedArticles,
+    [feedArticles, feedType, readArticleIdsForOrdering],
+  );
+  const isFeedOrderReady = feedType !== "home" || readArticleIdsForOrdering !== null;
+  const activeArticle =
+    activeIndex < orderedFeedArticles.length ? orderedFeedArticles[activeIndex] : null;
   const hasTerminalCard = !hasMore;
 
   useEffect(() => {
@@ -83,6 +97,8 @@ export function ArticleFeed({
     setLoadMoreError(null);
     setActiveIndex(initialActiveIndex);
     setHasRestoredProgress(false);
+    newlyReadArticleIdsRef.current.clear();
+    setReadArticleIdsForOrdering(null);
   }, [
     articles,
     initialActiveIndex,
@@ -94,16 +110,33 @@ export function ArticleFeed({
   ]);
 
   useEffect(() => {
+    if (feedType !== "home" || !userState.isLoaded) {
+      return;
+    }
+
+    setReadArticleIdsForOrdering(
+      (currentArticleIds) =>
+        currentArticleIds ??
+        new Set(
+          [...userState.readArticleIds].filter(
+            (articleId) => !newlyReadArticleIdsRef.current.has(articleId),
+          ),
+        ),
+    );
+  }, [feedType, userState.isLoaded, userState.readArticleIds]);
+
+  useEffect(() => {
     activeIndexRef.current = activeIndex;
   }, [activeIndex]);
 
   const scrollToIndex = useCallback(
     (nextIndex: number, behavior: ScrollBehavior = "smooth") => {
-      if (feedArticles.length === 0) {
+      if (orderedFeedArticles.length === 0) {
         return;
       }
 
-      const maxIndex = hasMore || hasTerminalCard ? feedArticles.length : feedArticles.length - 1;
+      const maxIndex =
+        hasMore || hasTerminalCard ? orderedFeedArticles.length : orderedFeedArticles.length - 1;
       const boundedIndex = Math.max(0, Math.min(nextIndex, maxIndex));
       const container = containerRef.current;
       const target = container?.children.item(boundedIndex);
@@ -113,23 +146,20 @@ export function ArticleFeed({
         return;
       }
 
-      container.scrollTo({
-        behavior,
-        top: target.offsetTop - container.offsetTop,
-      });
+      const top = target.offsetTop - container.offsetTop;
+      if (behavior === "auto") {
+        container.scrollTo({ behavior: "instant", top });
+        return;
+      }
+
+      container.scrollTo({ behavior, top });
     },
-    [feedArticles.length, hasMore, hasTerminalCard],
+    [hasMore, hasTerminalCard, orderedFeedArticles.length],
   );
 
   useEffect(() => {
-    if (isReady && initialActiveIndex > 0) {
-      window.requestAnimationFrame(() => scrollToIndex(initialActiveIndex, "auto"));
-    }
-  }, [initialActiveIndex, isReady, scrollToIndex]);
-
-  useEffect(() => {
     const container = containerRef.current;
-    if (!container || feedArticles.length === 0) {
+    if (!container || orderedFeedArticles.length === 0) {
       return;
     }
 
@@ -159,23 +189,35 @@ export function ArticleFeed({
     }
 
     return () => observer.disconnect();
-  }, [feedArticles.length, hasMore, isLoadingMore, loadMoreError]);
+  }, [hasMore, isLoadingMore, loadMoreError, orderedFeedArticles.length]);
 
   useEffect(() => {
-    if (!userState.isLoaded || hasRestoredProgress || feedArticles.length === 0) {
+    if (
+      !userState.isLoaded ||
+      !isFeedOrderReady ||
+      hasRestoredProgress ||
+      orderedFeedArticles.length === 0
+    ) {
       return;
     }
 
-    const restoredIndex = feedArticles.findIndex(
+    const restoredIndex = orderedFeedArticles.findIndex(
       (article) => article.id === userState.readingProgressArticleId,
     );
-    setHasRestoredProgress(true);
-    if (restoredIndex > 0) {
-      window.requestAnimationFrame(() => scrollToIndex(restoredIndex, "auto"));
-    }
+    const shouldRestoreProgress =
+      restoredIndex > 0 &&
+      !readArticleIdsForOrdering?.has(userState.readingProgressArticleId ?? "");
+    const nextIndex = shouldRestoreProgress ? restoredIndex : initialActiveIndex;
+    window.requestAnimationFrame(() => {
+      scrollToIndex(nextIndex, "auto");
+      setHasRestoredProgress(true);
+    });
   }, [
-    feedArticles,
     hasRestoredProgress,
+    initialActiveIndex,
+    isFeedOrderReady,
+    orderedFeedArticles,
+    readArticleIdsForOrdering,
     scrollToIndex,
     userState.isLoaded,
     userState.readingProgressArticleId,
@@ -201,6 +243,7 @@ export function ArticleFeed({
     }
 
     const timeoutId = window.setTimeout(() => {
+      newlyReadArticleIdsRef.current.add(activeArticle.id);
       void markArticleRead(activeArticle.id).catch((error: unknown) =>
         logWarning("Failed to mark article read", error),
       );
@@ -211,6 +254,10 @@ export function ArticleFeed({
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      if (event.key === " " && isSpaceActivationTarget(event.target)) {
+        return;
+      }
+
       if (event.key === "ArrowDown" || (event.key === " " && !event.shiftKey)) {
         event.preventDefault();
         scrollToIndex(activeIndexRef.current + 1);
@@ -233,7 +280,7 @@ export function ArticleFeed({
     }
 
     function onWheel(event: WheelEvent) {
-      if (feedArticles.length === 0 || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) {
+      if (orderedFeedArticles.length === 0 || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) {
         return;
       }
 
@@ -264,7 +311,7 @@ export function ArticleFeed({
 
     container.addEventListener("wheel", onWheel, { passive: false });
     return () => container.removeEventListener("wheel", onWheel);
-  }, [feedArticles.length, scrollToIndex]);
+  }, [orderedFeedArticles.length, scrollToIndex]);
 
   const loadMore = useCallback(async () => {
     if (!hasMore || !nextCursor || isLoadingMoreRef.current) {
@@ -297,15 +344,15 @@ export function ArticleFeed({
   }, [hasMore, loadMoreArticles, nextCursor, snapshotAt]);
 
   useEffect(() => {
-    if (activeIndex >= feedArticles.length - 2 && !loadMoreError) {
+    if (activeIndex >= orderedFeedArticles.length - 2 && !loadMoreError) {
       void loadMore();
     }
-  }, [activeIndex, feedArticles.length, loadMore, loadMoreError]);
+  }, [activeIndex, loadMore, loadMoreError, orderedFeedArticles.length]);
 
   async function moveForwardFromArticle(index: number) {
-    if (index === feedArticles.length - 1 && hasMore) {
+    if (index === orderedFeedArticles.length - 1 && hasMore) {
       const loaded = await loadMore();
-      scrollToIndex(loaded ? index + 1 : feedArticles.length);
+      scrollToIndex(loaded ? index + 1 : orderedFeedArticles.length);
       return;
     }
 
@@ -318,7 +365,7 @@ export function ArticleFeed({
     );
   }
 
-  if (feedArticles.length === 0) {
+  if (orderedFeedArticles.length === 0) {
     const isSavedFeed = emptyState === "saved";
     return (
       <section className="flex h-dvh flex-col overflow-hidden">
@@ -357,19 +404,19 @@ export function ArticleFeed({
     <section className="flex h-dvh flex-col overflow-hidden">
       <AppHeader
         activeIndex={activeIndex}
-        articleCount={feedArticles.length}
+        articleCount={orderedFeedArticles.length}
         feedType={feedType}
         hasMore={hasMore}
       />
 
       <div
         ref={containerRef}
-        className="min-h-0 flex-1 snap-y snap-mandatory overflow-y-auto overscroll-y-contain scroll-smooth"
-        data-ready={isReady ? "true" : "false"}
+        className="min-h-0 flex-1 snap-y snap-mandatory overflow-y-auto overscroll-y-contain scroll-smooth [overflow-anchor:none]"
+        data-ready={isReady && isFeedOrderReady && hasRestoredProgress ? "true" : "false"}
         data-snapshot-at={snapshotAt}
         data-testid="article-feed"
       >
-        {feedArticles.map((article, index) => {
+        {orderedFeedArticles.map((article, index) => {
           const isRead = userState.readArticleIds.has(article.id);
           const isSaved = userState.savedArticleIds.has(article.id);
 
@@ -478,6 +525,7 @@ export function ArticleFeed({
                       className="rounded-md bg-[var(--foreground)] px-4 py-2 text-sm font-medium text-[var(--background)] transition hover:bg-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
                       href={article.originalUrl}
                       onClick={() => {
+                        newlyReadArticleIdsRef.current.add(article.id);
                         void markArticleRead(article.id).catch((error: unknown) =>
                           logWarning("Failed to mark article read", error),
                         );
@@ -511,7 +559,7 @@ export function ArticleFeed({
                       }}
                       type="button"
                     >
-                      {index === feedArticles.length - 1
+                      {index === orderedFeedArticles.length - 1
                         ? hasMore
                           ? "追加記事を読む"
                           : "読み終える"
@@ -525,7 +573,7 @@ export function ArticleFeed({
                   aria-hidden="true"
                   data-progress-dots="true"
                 >
-                  {getProgressDotIndexes(feedArticles.length, index).map((dotIndex) => (
+                  {getProgressDotIndexes(orderedFeedArticles.length, index).map((dotIndex) => (
                     <span
                       className={
                         dotIndex === index
@@ -542,7 +590,7 @@ export function ArticleFeed({
         })}
         {hasMore ? (
           <LoadMoreStatusCard
-            index={feedArticles.length}
+            index={orderedFeedArticles.length}
             isLoading={isLoadingMore}
             message={loadMoreError}
             onRetry={() => {
@@ -550,10 +598,24 @@ export function ArticleFeed({
             }}
           />
         ) : (
-          <FeedCompleteCard index={feedArticles.length} onBackToTop={() => scrollToIndex(0)} />
+          <FeedCompleteCard
+            index={orderedFeedArticles.length}
+            onBackToTop={() => scrollToIndex(0)}
+          />
         )}
       </div>
     </section>
+  );
+}
+
+function isSpaceActivationTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof Element &&
+    Boolean(
+      target.closest(
+        'a[href], button, input, select, summary, textarea, [contenteditable="true"], [role="button"], [role="link"]',
+      ),
+    )
   );
 }
 

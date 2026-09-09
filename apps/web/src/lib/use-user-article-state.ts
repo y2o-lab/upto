@@ -74,7 +74,7 @@ export function useUserArticleState(
     const subscription = liveQuery(async () => {
       const [savedArticles, readArticles, readingProgress] = await Promise.all([
         ids.length > 0 ? db.savedArticles.where("articleId").anyOf(ids).toArray() : [],
-        ids.length > 0 ? db.readArticles.where("articleId").anyOf(ids).toArray() : [],
+        db.readArticles.toArray(),
         db.readingProgress.get(feedType),
       ]);
 
