@@ -46,15 +46,15 @@ describe("mapArticleRow", () => {
 });
 
 describe("getArticlesPage", () => {
-  it("returns a first fixture page with a next cursor", async () => {
+  it("orders fixture articles by registration date before score", async () => {
     process.env.UPTO_WEB_USE_FIXTURE_DATA = "true";
 
     const page = await getArticlesPage({ limit: 2 });
 
     expect(page.articles).toHaveLength(2);
     expect(page.articles.map((article) => article.id)).toEqual([
-      "00000000-0000-4000-8000-000000000001",
       "00000000-0000-4000-8000-000000000002",
+      "00000000-0000-4000-8000-000000000001",
     ]);
     expect(page.hasMore).toBe(true);
     expect(page.nextCursor).toEqual(expect.any(String));

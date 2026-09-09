@@ -23,6 +23,15 @@ export type AppSetting = {
   value: string;
 };
 
+export type PruneReadArticlesOptions = {
+  maxEntries?: number;
+  now?: Date;
+  retentionDays?: number;
+};
+
+const defaultReadArticleMaxEntries = 10_000;
+const defaultReadArticleRetentionDays = 30;
+
 export class UptoUserStateDatabase extends Dexie {
   appSettings: Table<AppSetting, AppSettingKey>;
   readArticles: Table<ReadArticle, string>;
@@ -90,6 +99,29 @@ export async function markArticleRead(
     articleId,
     readAt: now.toISOString(),
   });
+}
+
+export async function pruneReadArticles(
+  options: PruneReadArticlesOptions = {},
+  db = getUserStateDb(),
+): Promise<void> {
+  if (!db) {
+    return;
+  }
+
+  const now = options.now ?? new Date();
+  const retentionDays = options.retentionDays ?? defaultReadArticleRetentionDays;
+  const maxEntries = options.maxEntries ?? defaultReadArticleMaxEntries;
+  const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1_000).toISOString();
+  const expiredArticleIds = await db.readArticles.where("readAt").below(cutoff).primaryKeys();
+  await db.readArticles.bulkDelete(expiredArticleIds);
+
+  const retainedArticleIds = await db.readArticles.orderBy("readAt").primaryKeys();
+  if (retainedArticleIds.length > maxEntries) {
+    await db.readArticles.bulkDelete(
+      retainedArticleIds.slice(0, retainedArticleIds.length - maxEntries),
+    );
+  }
 }
 
 export async function saveReadingProgress(

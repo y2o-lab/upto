@@ -6,6 +6,7 @@ import {
   getReadingProgress,
   markArticleRead,
   markArticleSaved,
+  pruneReadArticles,
   saveReadingProgress,
   setAppSetting,
   UptoUserStateDatabase,
@@ -75,5 +76,22 @@ describe("UptoUserStateDatabase", () => {
     });
 
     db.close();
+  });
+
+  it("keeps only recent read history up to the configured limit", async () => {
+    const db = createTestDb();
+    const now = new Date("2026-06-15T00:00:00.000Z");
+
+    await markArticleRead("expired", new Date("2026-05-15T00:00:00.000Z"), db);
+    await markArticleRead("oldest", new Date("2026-06-13T00:00:00.000Z"), db);
+    await markArticleRead("middle", new Date("2026-06-14T00:00:00.000Z"), db);
+    await markArticleRead("newest", now, db);
+
+    await pruneReadArticles({ maxEntries: 2, now, retentionDays: 30 }, db);
+
+    await expect(db.readArticles.orderBy("readAt").toArray()).resolves.toEqual([
+      { articleId: "middle", readAt: "2026-06-14T00:00:00.000Z" },
+      { articleId: "newest", readAt: "2026-06-15T00:00:00.000Z" },
+    ]);
   });
 });

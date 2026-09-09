@@ -79,6 +79,7 @@ export const articles = pgTable(
   },
   (table) => [
     uniqueIndex("articles_normalized_url_unique").on(table.normalizedUrl),
+    index("articles_created_at_idx").on(table.createdAt),
     index("articles_published_at_idx").on(table.publishedAt),
     index("articles_source_id_idx").on(table.sourceId),
   ],
