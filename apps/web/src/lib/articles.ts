@@ -83,7 +83,7 @@ const fixtureRows: ArticleRow[] = [
       "カード遷移は Client Component に閉じ込める",
       "追加取得は cursor pagination で拡張する",
     ],
-    createdAt: new Date("2026-06-07T03:00:00.000Z"),
+    createdAt: new Date("2026-06-07T02:00:00.000Z"),
     id: "00000000-0000-4000-8000-000000000001",
     modelId: "fixture",
     normalizedUrl: "https://zenn.dev/example/articles/next-news",
@@ -115,7 +115,7 @@ const fixtureRows: ArticleRow[] = [
       "記事単位の失敗を retry_count で管理する",
       "Gemini の rate limit を concurrency で制御する",
     ],
-    createdAt: new Date("2026-06-07T02:00:00.000Z"),
+    createdAt: new Date("2026-06-07T03:00:00.000Z"),
     id: "00000000-0000-4000-8000-000000000002",
     modelId: "fixture",
     normalizedUrl: "https://qiita.com/example/items/collector",
@@ -165,7 +165,7 @@ export async function getArticlesPage(
   const snapshotAt = normalizeArticlePageSnapshotAt(input.snapshotAt);
 
   if (process.env.UPTO_WEB_USE_FIXTURE_DATA === "true") {
-    return paginateRows(fixtureRows, { cursor, limit, snapshotAt });
+    return paginateRows([...fixtureRows].sort(compareArticleRows), { cursor, limit, snapshotAt });
   }
 
   const db = getDb();
@@ -195,9 +195,9 @@ export async function getArticlesPage(
     .leftJoin(articleMetrics, eq(articles.id, articleMetrics.articleId))
     .where(buildArticlePageWhere({ cursor, snapshotAt: new Date(snapshotAt) }))
     .orderBy(
+      desc(articles.createdAt),
       sql`coalesce(${articleMetrics.score}, 0) desc`,
       sql`${articles.publishedAt} desc nulls last`,
-      desc(articles.createdAt),
       desc(articles.id),
     )
     .limit(limit + 1);
@@ -396,6 +396,10 @@ function createCursorFromRow(row: ArticleRow): ArticlePageCursor {
 function isRowAfterCursor(row: ArticleRow, cursor: ArticlePageCursor): boolean {
   const rowCursor = createCursorFromRow(row);
 
+  if (rowCursor.createdAt !== cursor.createdAt) {
+    return rowCursor.createdAt < cursor.createdAt;
+  }
+
   if (rowCursor.score !== cursor.score) {
     return rowCursor.score < cursor.score;
   }
@@ -408,11 +412,30 @@ function isRowAfterCursor(row: ArticleRow, cursor: ArticlePageCursor): boolean {
     return publishedComparison > 0;
   }
 
-  if (rowCursor.createdAt !== cursor.createdAt) {
-    return rowCursor.createdAt < cursor.createdAt;
+  return rowCursor.id < cursor.id;
+}
+
+function compareArticleRows(left: ArticleRow, right: ArticleRow): number {
+  const leftCursor = createCursorFromRow(left);
+  const rightCursor = createCursorFromRow(right);
+
+  if (leftCursor.createdAt !== rightCursor.createdAt) {
+    return leftCursor.createdAt < rightCursor.createdAt ? 1 : -1;
   }
 
-  return rowCursor.id < cursor.id;
+  if (leftCursor.score !== rightCursor.score) {
+    return rightCursor.score - leftCursor.score;
+  }
+
+  const publishedComparison = comparePublishedAtDescNullsLast(
+    leftCursor.publishedAt,
+    rightCursor.publishedAt,
+  );
+  if (publishedComparison !== 0) {
+    return publishedComparison;
+  }
+
+  return leftCursor.id < rightCursor.id ? 1 : leftCursor.id > rightCursor.id ? -1 : 0;
 }
 
 function comparePublishedAtDescNullsLast(left: string | null, right: string | null): number {
@@ -449,17 +472,17 @@ function buildArticlePageWhere(input: { cursor: ArticlePageCursor | null; snapsh
       ${articles.summaryStatus} = 'summarized'
       and ${articles.createdAt} <= ${snapshotAt}
       and (
-        coalesce(${articleMetrics.score}, 0) < ${cursor.score}
+        ${articles.createdAt} < ${createdAt}
         or (
-          coalesce(${articleMetrics.score}, 0) = ${cursor.score}
+          ${articles.createdAt} = ${createdAt}
           and (
-            ${articles.publishedAt} < ${publishedAt}
-            or ${articles.publishedAt} is null
+            coalesce(${articleMetrics.score}, 0) < ${cursor.score}
             or (
-              ${articles.publishedAt} = ${publishedAt}
+              coalesce(${articleMetrics.score}, 0) = ${cursor.score}
               and (
-                ${articles.createdAt} < ${createdAt}
-                or (${articles.createdAt} = ${createdAt} and ${articles.id} < ${cursor.id})
+                ${articles.publishedAt} < ${publishedAt}
+                or ${articles.publishedAt} is null
+                or (${articles.publishedAt} = ${publishedAt} and ${articles.id} < ${cursor.id})
               )
             )
           )
@@ -472,13 +495,13 @@ function buildArticlePageWhere(input: { cursor: ArticlePageCursor | null; snapsh
     ${articles.summaryStatus} = 'summarized'
     and ${articles.createdAt} <= ${snapshotAt}
     and (
-      coalesce(${articleMetrics.score}, 0) < ${cursor.score}
+      ${articles.createdAt} < ${createdAt}
       or (
-        coalesce(${articleMetrics.score}, 0) = ${cursor.score}
+        ${articles.createdAt} = ${createdAt}
         and ${articles.publishedAt} is null
         and (
-          ${articles.createdAt} < ${createdAt}
-          or (${articles.createdAt} = ${createdAt} and ${articles.id} < ${cursor.id})
+          coalesce(${articleMetrics.score}, 0) < ${cursor.score}
+          or (coalesce(${articleMetrics.score}, 0) = ${cursor.score} and ${articles.id} < ${cursor.id})
         )
       )
     )
