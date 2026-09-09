@@ -1,4 +1,29 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+async function seedReadArticleIds(page: Page, articleIds: string[]) {
+  await page.evaluate(
+    (ids) =>
+      new Promise<void>((resolve, reject) => {
+        const openRequest = indexedDB.open("upto_user_state");
+        openRequest.onerror = () => reject(openRequest.error);
+        openRequest.onsuccess = () => {
+          const db = openRequest.result;
+          const transaction = db.transaction("read_articles", "readwrite");
+          transaction.onerror = () => reject(transaction.error);
+          transaction.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+
+          const store = transaction.objectStore("read_articles");
+          for (const articleId of ids) {
+            store.put({ articleId, readAt: "2026-09-09T00:00:00.000Z" });
+          }
+        };
+      }),
+    articleIds,
+  );
+}
 
 test("renders the news feed", async ({ page }) => {
   await page.goto("/");
@@ -9,6 +34,16 @@ test("renders the news feed", async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "要約を見る" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "次の記事へ" }).first()).toBeVisible();
+});
+
+test("serves an application icon", async ({ page }) => {
+  await page.goto("/");
+
+  const iconHref = await page.locator('link[rel~="icon"]').getAttribute("href");
+  expect(iconHref).not.toBeNull();
+
+  const response = await page.request.get(iconHref ?? "/favicon.ico");
+  expect(response.ok()).toBe(true);
 });
 
 test("persists the selected color theme across visits", async ({ page }) => {
@@ -50,6 +85,21 @@ test("moves through cards with keyboard navigation", async ({ page }) => {
     .toBeGreaterThan(0);
 
   await page.keyboard.press("Shift+Space");
+  await expect(page.locator("article[data-index='0'] h2")).toBeInViewport();
+  await expect
+    .poll(async () => page.getByTestId("article-feed").evaluate((element) => element.scrollTop))
+    .toBeLessThan(80);
+});
+
+test("lets a focused save button handle Space without moving the feed", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByTestId("article-feed")).toHaveAttribute("data-ready", "true");
+
+  const saveButton = page.getByTestId("save-article-0");
+  await saveButton.focus();
+  await page.keyboard.press("Space");
+
+  await expect(saveButton).toHaveAttribute("data-saved", "true");
   await expect(page.locator("article[data-index='0'] h2")).toBeInViewport();
   await expect
     .poll(async () => page.getByTestId("article-feed").evaluate((element) => element.scrollTop))
@@ -225,6 +275,78 @@ test("marks an article read after staying on it for three seconds", async ({ pag
       ),
     )
     .toBe(true);
+});
+
+test("shows unread articles before read articles while preserving the ranking within each group", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByTestId("article-feed")).toHaveAttribute("data-ready", "true");
+  await seedReadArticleIds(page, [
+    "00000000-0000-4000-8000-000000000001",
+    "00000000-0000-4000-8000-000000000003",
+  ]);
+
+  await page.reload();
+  await expect(page.getByTestId("article-feed")).toHaveAttribute("data-ready", "true");
+
+  await expect(page.locator("article[data-index='0'] h2")).toHaveText(
+    "ニュース収集バッチを安全に設計する",
+  );
+  await expect(page.locator("article[data-index='0'] h2")).toBeInViewport();
+  await expect(page.locator("article[data-index='1'] h2")).toHaveText(
+    "fixture pagination article 4",
+  );
+  await expect(page.locator("article[data-index='8'] h2")).toHaveText(
+    "Next.js で縦スワイプ型ニュース UI を作る",
+  );
+  await expect(page.locator("article[data-index='9'] h2")).toHaveText(
+    "fixture pagination article 3",
+  );
+
+  await page.locator("article[data-index='8']").scrollIntoViewIfNeeded();
+  await expect(page.locator("article[data-index='8'] h2")).toHaveText(
+    "fixture pagination article 11",
+  );
+  await expect(page.locator("article[data-index='9'] h2")).toHaveText(
+    "fixture pagination article 12",
+  );
+  await expect(page.locator("article[data-index='10'] h2")).toHaveText(
+    "Next.js で縦スワイプ型ニュース UI を作る",
+  );
+  await expect(page.locator("article[data-index='11'] h2")).toHaveText(
+    "fixture pagination article 3",
+  );
+});
+
+test("keeps the ranking order when every article is already read", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByTestId("article-feed")).toHaveAttribute("data-ready", "true");
+  await seedReadArticleIds(
+    page,
+    Array.from(
+      { length: 12 },
+      (_, index) => `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+    ),
+  );
+
+  await page.reload();
+  await expect(page.getByTestId("article-feed")).toHaveAttribute("data-ready", "true");
+
+  await expect(page.locator("article[data-index='0'] h2")).toHaveText(
+    "Next.js で縦スワイプ型ニュース UI を作る",
+  );
+  await expect(page.locator("article[data-index='1'] h2")).toHaveText(
+    "ニュース収集バッチを安全に設計する",
+  );
+
+  await page.locator("article[data-index='8']").scrollIntoViewIfNeeded();
+  await expect(page.locator("article[data-index='10'] h2")).toHaveText(
+    "fixture pagination article 11",
+  );
+  await expect(page.locator("article[data-index='11'] h2")).toHaveText(
+    "fixture pagination article 12",
+  );
 });
 
 test("keeps article content inside the active card viewport", async ({ page }) => {

@@ -9,7 +9,7 @@
     "dev": "next dev",
     "start": "next start",
     "storybook": "storybook dev -p 6006 -c .storybook",
-    "test": "cd ../.. && vitest run apps/web/src/app/api/articles/route.test.ts apps/web/src/lib/articles.test.ts apps/web/src/lib/user-state-db.test.ts",
+    "test": "cd ../.. && vitest run apps/web/src/app/api/articles/route.test.ts apps/web/src/lib/article-feed-order.test.ts apps/web/src/lib/articles.test.ts apps/web/src/lib/user-state-db.test.ts",
     "typecheck": "tsc -b --noEmit tsconfig.json"
   },
   "dependencies": {
