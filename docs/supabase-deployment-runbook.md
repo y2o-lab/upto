@@ -47,21 +47,13 @@ Network Restrictionsを使う場合は、VercelとTrigger.dev runner、および
 
 ## 2. migrationを適用する
 
-schema変更を含むreleaseでは、Webとcollectorをデプロイする前にbackup状態を確認し、migrationを1回だけ実行する。taskやWebの起動commandへmigrationを組み込まない。
+schema変更を含む`release`では、Web deploymentの前にGitHub Actionsの`Release web` workflowがmigrationを1回だけ実行する。migrationが失敗するとWeb deploymentは開始しない。taskやWebの起動commandへmigrationを組み込まない。
 
-1. repositoryで対象release commitをcheckoutする。
-2. secret storeからproductionのDirect connection URLを`DIRECT_DATABASE_URL`へ注入する。
-3. URLの接続先project refを再確認する。
-4. 次を実行する。
+`production-release` GitHub Environmentに、productionのDirect connection URLを`DIRECT_DATABASE_URL`として設定する。単独開発ではrequired reviewersを設定せず、release merge後にworkflowを自動実行する。Vercel CLI用の`VERCEL_ORG_ID`、`VERCEL_PROJECT_ID`、`VERCEL_TOKEN`も同じEnvironmentのsecretとして設定する。
 
-```bash
-pnpm --filter @upto/db db:migrate
-```
+workflowでmigration成功後にVercel production deploymentが成功したことと、Supabase DashboardのTable Editorでmigrationが反映されたことを確認する。`DIRECT_DATABASE_URL`をcommand line引数、chat、ticket、CI logへ貼り付けない。
 
-5. commandが正常終了したことと、Supabase DashboardのTable EditorでUptoのtableが存在することを確認する。
-6. shellや一時環境から`DIRECT_DATABASE_URL`を破棄する。
-
-URLをcommand line引数、chat、ticket、CI logへ貼り付けない。`.env`や`.env.local`を本番secretの保管場所にしない。
+`.env`や`.env.local`を本番secretの保管場所にしない。
 
 ## 3. WebをVercelへ接続する
 
@@ -81,7 +73,7 @@ Vercel Dashboardの対象projectで **Settings > Environment Variables** を開�
 1. `DATABASE_URL`にSupabase production projectのTransaction pooler URL（port `6543`）を設定する。
 2. `DATABASE_POOL_MAX=2`を **Production** に設定する。
 3. `UPTO_WEB_USE_FIXTURE_DATA`をProductionへ設定しない。
-4. production branchの対象commitをデプロイ、または同じcommitをproductionへpromoteしてredeployする。
+4. `release`へmergeした対象commitのGitHub Actions `Release web` workflowが成功したことを確認する。
 5. production URLでトップページと`/api/articles?limit=1`を確認する。
 
 `DATABASE_URL`、`DIRECT_DATABASE_URL`、database passwordを`NEXT_PUBLIC_`で始まる変数へ設定しない。Vercelへ`DIRECT_DATABASE_URL`を設定する必要もない。
