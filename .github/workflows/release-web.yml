@@ -51,6 +51,22 @@ jobs:
           node-version: 24
 
       - run: pnpm install --frozen-lockfile
+      - name: Configure migration CA certificate
+        env:
+          DATABASE_SSL_CA: ${{ secrets.DATABASE_SSL_CA }}
+        run: |
+          if [ -z "$DATABASE_SSL_CA" ]; then
+            echo "::error::DATABASE_SSL_CA is not configured in the production-release environment."
+            exit 1
+          fi
+          umask 077
+          migration_ca_file="$(mktemp "$RUNNER_TEMP/upto-migration-ca.XXXXXX")"
+          printf '%s\n' "$DATABASE_SSL_CA" > "$migration_ca_file"
+          if ! openssl x509 -in "$migration_ca_file" -noout > /dev/null 2>&1; then
+            echo "::error::DATABASE_SSL_CA must contain a PEM-encoded CA certificate."
+            exit 1
+          fi
+          printf 'NODE_EXTRA_CA_CERTS=%s\n' "$migration_ca_file" >> "$GITHUB_ENV"
       - name: Check migration connection
         run: pnpm --filter @upto/db db:diagnose-migration
       - name: Apply database migrations
