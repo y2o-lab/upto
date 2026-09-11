@@ -4,6 +4,7 @@ import { executeCollectNewsTask } from "./collect-news-runner.js";
 
 export const collectNews = schedules.task({
   id: "collect-news",
+  machine: "medium-2x",
   maxDuration: 7_200,
   queue: {
     concurrencyLimit: 1,
