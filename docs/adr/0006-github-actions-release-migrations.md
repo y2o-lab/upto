@@ -42,3 +42,4 @@ workflow は、先に `pnpm verify` を実行し、その成功後にmigration�
 ## 追記
 
 - 2026-09-10: 初版作成。Web production deployment の前に migration を成功させる経路を Accepted とした。
+- 2026-09-12: 接続方式をDirect専用とする部分は Superseded by [ADR-0007](0007-session-pooler-release-migrations.md)。IPv4環境のSession pooler利用とCA証明書の設定を採用する。検証・migration・Web deploymentの順序保証は引き続き有効。

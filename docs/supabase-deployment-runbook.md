@@ -22,15 +22,15 @@ Supabase Dashboardで対象projectを開き、画面上部の **Connect** から
 | Vercel | `DATABASE_URL` | Transaction pooler、port `6543` | serverlessなWeb runtime |
 | Trigger.dev | `DATABASE_URL` | Direct、port `5432` | IPv6対応の永続runner |
 | Trigger.dev | `DATABASE_URL` | Session pooler、port `5432` | runnerがIPv4のみの場合の代替 |
-| migration実行環境 | `DIRECT_DATABASE_URL` | Direct、port `5432` | Drizzle migration |
+| migration実行環境 | `DIRECT_DATABASE_URL` | Session pooler、port `5432`（IPv4）、または到達可能なDirect | Drizzle migration |
 
-VercelのURLをmigrationへ流用しない。Transaction poolerはprepared statementなどsession依存機能に制約があり、migrationや管理コマンドにはDirect connectionを使う。
+VercelのURLをmigrationへ流用しない。Transaction poolerはprepared statementなどsession依存機能に制約があり、migrationにはSession poolerまたはDirect connectionを使う。
 
-Direct endpointは標準ではIPv6である。Trigger.dev runnerまたはmigration実行環境からIPv6へ到達できない場合、collector runtimeにはShared PoolerのSession modeを使用する。migrationはIPv6対応環境から実行するか、SupabaseのIPv4 add-onを利用する。Session poolerをmigrationの代替にはしない。
+Direct endpointは標準ではIPv6である。Trigger.dev runnerまたはmigration実行環境からIPv6へ到達できない場合、Shared PoolerのSession modeを使用する。GitHub ActionsのmigrationもSession poolerを利用する。Directを使用する場合はIPv6対応環境またはSupabaseのIPv4 add-onが必要になる（[ADR-0007](adr/0007-session-pooler-release-migrations.md)）。
 
 すべてのremote接続でTLSを使用する。Supabase Dashboardが表示する接続文字列を基準にし、`sslmode=disable`を指定しない。
 
-Direct connectionの証明書チェーンを実行環境のNode.jsが信頼できない場合、WebまたはTrigger.dev task runtimeにはSupabase Connect画面から取得したServer root certificateのPEM全文を`DATABASE_SSL_CA`としてSecret設定する。`@upto/db`はこの値をCAとして使い、接続先ホスト名も検証する。task runtimeの`DATABASE_URL`へ開発端末の`sslrootcert`ファイルパスを入れない。Drizzle migrationは`@upto/db`を経由しないため、migration実行環境では従来どおり`DIRECT_DATABASE_URL`の`sslrootcert`でローカルのCAファイルを指定する。
+接続先の証明書チェーンを実行環境のNode.jsが信頼できない場合、WebまたはTrigger.dev task runtimeにはSupabaseから取得したServer root certificateのPEM全文を`DATABASE_SSL_CA`としてSecret設定する。`@upto/db`はこの値をCAとして使い、接続先ホスト名も検証する。task runtimeの`DATABASE_URL`へ開発端末の`sslrootcert`ファイルパスを入れない。Drizzle migrationは`@upto/db`を経由しないため、GitHub Actionsでは後述のCA設定stepが`NODE_EXTRA_CA_CERTS`を設定し、接続診断とDrizzle Kitの両方に適用する。管理端末でのmigrationには`DIRECT_DATABASE_URL`の`sslrootcert`でその端末のCAファイルを指定できる。
 
 ## 1. Supabase projectを準備する
 
@@ -49,7 +49,15 @@ Network Restrictionsを使う場合は、VercelとTrigger.dev runner、および
 
 schema変更を含む`release`では、Web deploymentの前にGitHub Actionsの`Release web` workflowがmigrationを1回だけ実行する。migrationが失敗するとWeb deploymentは開始しない。taskやWebの起動commandへmigrationを組み込まない。
 
-`production-release` GitHub Environmentに、productionのDirect connection URLを`DIRECT_DATABASE_URL`として設定する。単独開発ではrequired reviewersを設定せず、release merge後にworkflowを自動実行する。Vercel CLI用の`VERCEL_ORG_ID`、`VERCEL_PROJECT_ID`、`VERCEL_TOKEN`も同じEnvironmentのsecretとして設定する。
+GitHubの **Settings → Environments → production-release → Environment secrets** に次を設定する。
+
+- `DIRECT_DATABASE_URL`: Supabaseの **Connect → Session pooler** のURI（port `5432`）。database passwordを置き換え、予約文字をpercent-encodeし、`sslmode=verify-full`を指定する。開発端末の`sslrootcert`パスは含めない。変数名は互換性のため維持する。
+- `DATABASE_SSL_CA`: Supabaseの **Database Settings → SSL Configuration** からダウンロードしたCA証明書のPEM全文。`-----BEGIN CERTIFICATE-----`と`-----END CERTIFICATE-----`を含む改行付きの内容を貼り付ける。ファイル名やパス、秘密鍵ではない。
+- Vercel CLI用の`VERCEL_ORG_ID`、`VERCEL_PROJECT_ID`、`VERCEL_TOKEN`。
+
+workflowはCAをrunnerの一時ファイルへ権限`0600`で保存し、`NODE_EXTRA_CA_CERTS`にそのパスを設定する。CAが未設定またはPEM証明書として読み取れない場合はmigration前に失敗する。証明書や接続URIをログに出力しない。
+
+単独開発ではrequired reviewersを設定せず、release merge後にworkflowを自動実行する。Secretのみの更新は失敗したrunの再実行で反映される。workflow定義も修正した場合は、修正を含むcommitを`release`へ反映して新しいrunを実行する。過去runの再実行は過去のcommitと定義を使う。
 
 workflowでmigration成功後にVercel production deploymentが成功したことと、Supabase DashboardのTable Editorでmigrationが反映されたことを確認する。`DIRECT_DATABASE_URL`をcommand line引数、chat、ticket、CI logへ貼り付けない。
 
@@ -122,7 +130,7 @@ Trigger.dev Dashboardの対象projectで **Project Settings > Environment Variab
 | password authentication failed | project、username、database password、URL encoding |
 | Webだけ接続できない | VercelがTransaction pooler URLを使っているか、変更後にredeployしたか |
 | collectorだけ接続できない | URLがTrigger.dev task environmentにあるか、IPv4-onlyならSession poolerか |
-| migrationだけ接続できない | `DIRECT_DATABASE_URL`、migration元のIPv6、Network Restrictions |
+| migrationだけ接続できない | `DIRECT_DATABASE_URL`、Session poolerのhost/user/port、`DATABASE_SSL_CA`、Directの場合はIPv6、Network Restrictions |
 | too many connections | Vercel instance数、`DATABASE_POOL_MAX`、Supavisor pool size、stale deployment |
 | Webにfixture記事が出る | `UPTO_WEB_USE_FIXTURE_DATA=true`が残っていないか |
 
