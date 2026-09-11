@@ -15,19 +15,19 @@
     "typecheck": "pnpm --dir ../.. exec tsc -b apps/collector/tsconfig.json"
   },
   "dependencies": {
-    "@google/genai": "2.17.1",
+    "@google/genai": "2.21.0",
     "@mozilla/readability": "0.6.0",
-    "@trigger.dev/sdk": "4.5.11",
+    "@trigger.dev/sdk": "4.5.16",
     "@upto/db": "workspace:0.1.0",
     "@upto/domain": "workspace:0.1.0",
-    "fast-xml-parser": "5.11.0",
+    "fast-xml-parser": "5.11.1",
     "jsdom": "30.0.1",
-    "p-limit": "7.3.1",
-    "zod": "4.4.3"
+    "p-limit": "7.3.2",
+    "zod": "4.5.4"
   },
   "devDependencies": {
     "@types/jsdom": "30.0.0",
-    "trigger.dev": "4.5.11",
+    "trigger.dev": "4.5.16",
     "typescript": "5.9.3"
   }
 }
