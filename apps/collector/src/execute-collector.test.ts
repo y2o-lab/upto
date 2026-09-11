@@ -51,16 +51,14 @@ describe("executeCollector", () => {
   });
 
   it("fails the execution when no feed could be fetched", async () => {
-    const runner = vi.fn(
-      async (): Promise<RunCollectorResult> => ({
-        articleCount: 0,
-        dryRun: false,
-        failedCount: 1,
-        failedFeedCount: 1,
-        feedCount: 1,
-        successfulFeedCount: 0,
-      }),
-    );
+    const runner = vi.fn(async (): Promise<RunCollectorResult> => ({
+      articleCount: 0,
+      dryRun: false,
+      failedCount: 1,
+      failedFeedCount: 1,
+      feedCount: 1,
+      successfulFeedCount: 0,
+    }));
 
     await expect(
       executeCollector({

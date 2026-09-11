@@ -39,7 +39,7 @@ test("renders the news feed", async ({ page }) => {
 test("serves an application icon", async ({ page }) => {
   await page.goto("/");
 
-  const iconHref = await page.locator('link[rel~="icon"]').getAttribute("href");
+  const iconHref = await page.locator('link[rel~="icon"]').first().getAttribute("href");
   expect(iconHref).not.toBeNull();
 
   const response = await page.request.get(iconHref ?? "/favicon.ico");
