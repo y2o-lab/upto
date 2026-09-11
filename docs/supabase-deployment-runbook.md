@@ -53,6 +53,10 @@ schema変更を含む`release`では、Web deploymentの前にGitHub Actionsの`
 
 workflowでmigration成功後にVercel production deploymentが成功したことと、Supabase DashboardのTable Editorでmigrationが反映されたことを確認する。`DIRECT_DATABASE_URL`をcommand line引数、chat、ticket、CI logへ貼り付けない。
 
+`Release web` の migration job は適用前に接続診断を実行する。失敗時は Actions の `Report migration failure` step にエラー注釈を出し、DNS・TLS・認証・接続拒否などは再実行した接続診断のエラーコードとメッセージで確認する。SQLやDrizzleの適用エラーは `Apply database migrations` step で確認する。接続URLやpasswordはログに出力しない。
+
+`apps/web/vercel.json` の `git.deploymentEnabled.release=false` により、`release` push に対するVercel Git自動deploymentを停止する。Vercel projectのRoot Directoryは`apps/web`、Production Branchは`release`に保つ。production deploymentは `Release web` workflowのmigration成功後に実行されるVercel CLIだけを経路とする。`test` branchのPreview deploymentは引き続きVercel Git連携で作成する。
+
 `.env`や`.env.local`を本番secretの保管場所にしない。
 
 ## 3. WebをVercelへ接続する

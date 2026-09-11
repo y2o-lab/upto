@@ -12,6 +12,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit false",
     "db:generate": "drizzle-kit generate",
+    "db:diagnose-migration": "node scripts/diagnose-migration-connection.mjs",
     "db:migrate": "drizzle-kit migrate",
     "test": "vitest run",
     "typecheck": "tsc -b --noEmit tsconfig.json"
