@@ -17,11 +17,11 @@
     "@upto/domain": "workspace:0.1.0",
     "@vercel/analytics": "2.0.1",
     "@vercel/speed-insights": "2.0.0",
-    "dexie": "4.4.5",
+    "dexie": "4.4.6",
     "next": "16.3.4",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "zod": "4.5.4"
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "4.6.2"
   },
   "devDependencies": {
     "@storybook/addon-docs": "10.6.0",
@@ -31,6 +31,6 @@
     "fake-indexeddb": "6.2.5",
     "storybook": "10.6.0",
     "tailwindcss": "4.3.3",
-    "vite": "8.2.2"
+    "vite": "8.3.0"
   }
 }

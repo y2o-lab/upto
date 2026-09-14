@@ -17,6 +17,6 @@
   "dependencies": {
     "normalize-url": "9.0.1",
     "tldts": "7.4.12",
-    "zod": "4.5.4"
+    "zod": "4.6.2"
   }
 }
