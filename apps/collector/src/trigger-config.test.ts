@@ -240,7 +240,7 @@ describe("Trigger.dev configuration", () => {
     expect(collectorPackageJson.devDependencies["trigger.dev"]).toBe(
       collectorPackageJson.dependencies["@trigger.dev/sdk"],
     );
-    expect(collectorPackageJson.devDependencies.typescript).toBe("5.9.3");
+    expect(collectorPackageJson.devDependencies.typescript).toBe("7.0.2");
     expect(collectorPackageJson.scripts.typecheck).toContain("pnpm --dir ../.. exec tsc");
   });
 });
