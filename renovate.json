@@ -1,0 +1,18 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "group:monorepos", "group:recommended"],
+  "enabledManagers": ["npm", "github-actions"],
+  "timezone": "Asia/Tokyo",
+  "schedule": ["before 10am on Monday"],
+  "prConcurrentLimit": 5,
+  "dependencyDashboard": true,
+  "packageRules": [
+    {
+      "description": "Dependabotと同様にnpmのminor／patch更新をまとめる。",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "npm minor and patch updates",
+      "groupSlug": "npm-minor-and-patch"
+    }
+  ]
+}
