@@ -2,7 +2,7 @@ import { logger, schedules } from "@trigger.dev/sdk";
 
 import { executeCollectNewsTask } from "./collect-news-runner.js";
 
-export const collectNews = schedules.task({
+export const collectNewsDefinition: Parameters<typeof schedules.task>[0] = {
   id: "collect-news",
   machine: "medium-2x",
   maxDuration: 7_200,
@@ -22,4 +22,6 @@ export const collectNews = schedules.task({
       logger,
       runId: ctx.run.id,
     }),
-});
+};
+
+export const collectNews = schedules.task(collectNewsDefinition);
