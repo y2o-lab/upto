@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Upto — Geminiのレート制限と送信フロー</title>
+<style>
+    :root{color-scheme:light;--bg:#f7f6f2;--paper:#fff;--ink:#202b31;--muted:#5d6c73;--line:#d9dedb;--orange:#af480f;--soft-orange:#fff0e5;--green:#176f65;--soft-green:#e8f4ef;--gray:#eef0ed;--shadow:0 8px 32px #202b3108}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;line-height:1.7}a{color:var(--green);text-underline-offset:4px}button,input,select{font:inherit}button,select{cursor:pointer}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--orange);outline-offset:4px}
+    .wrap{max-width:1160px;margin:auto;padding:0 32px}header{padding:44px 0 26px}.topline{display:flex;justify-content:space-between;gap:16px;align-items:center;font-size:12px;letter-spacing:.1em}.brand{font-size:20px;font-weight:700;letter-spacing:-.04em}.pill{background:var(--soft-orange);color:var(--orange);border-radius:30px;padding:5px 12px;font-size:12px}.eyebrow{font-size:12px;letter-spacing:.12em;color:var(--orange);font-weight:700;margin:32px 0 12px}h1{font-size:clamp(28px,4.5vw,48px);letter-spacing:-.045em;line-height:1.35;margin:0 0 18px}h2{font-size:24px;letter-spacing:-.025em;margin:0 0 10px}h3{font-size:17px;margin:0 0 10px}p{margin:0 0 16px}.lead{max-width:760px;color:var(--muted);font-size:16px}.nav{display:flex;flex-wrap:wrap;gap:8px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:16px 0;margin-top:28px}.nav a{text-decoration:none;color:var(--ink);font-size:13px;padding:6px 12px;border-radius:6px}.nav a:hover{background:var(--gray)}section{padding:36px 0;border-bottom:1px solid var(--line);scroll-margin-top:20px}.section-head{display:flex;gap:16px;align-items:baseline;margin-bottom:22px}.num{color:var(--orange);font-size:12px;font-weight:700;letter-spacing:.1em}.caption{color:var(--muted);font-size:13px}.compare{display:grid;grid-template-columns:1fr 1.45fr;gap:24px}.panel{background:var(--paper);padding:24px;border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}.panel-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;gap:8px;font-size:12px;color:var(--muted)}.node{padding:15px 16px;border:1px solid var(--line);border-radius:9px;background:var(--paper);text-align:center;min-width:0}.node b{display:block;font-size:15px}.node small{display:block;color:var(--muted);font-size:12px;margin-top:3px}.node.cloud{background:var(--soft-orange);border-color:transparent}.node.keep{background:var(--soft-green);border-color:transparent}.arrow{text-align:center;color:var(--muted);padding:5px;font-size:20px;line-height:1.2}.rack{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.chip{background:var(--gray);padding:8px;border-radius:6px;text-align:center;font-size:12px}.footnote{margin-top:18px;font-size:13px;color:var(--muted)}.scope{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}.scope span{padding:6px 12px;background:var(--soft-green);font-size:12px;border-radius:20px}.roles{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:22px}.role{border-top:3px solid var(--orange);padding-top:14px}.role h3{margin-bottom:5px}.role p{font-size:13px;color:var(--muted)}
+    .lane-map{background:var(--paper);padding:24px;border:1px solid var(--line);border-radius:14px}.lane-grid{display:grid;grid-template-columns:150px 1fr 36px 190px;gap:14px;align-items:center}.queue-stack{display:grid;gap:6px}.article-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.article{background:var(--soft-orange);padding:16px 8px;text-align:center;border-radius:8px;font-size:13px}.article b{display:block}.gate{background:var(--soft-green);border-radius:10px;padding:20px;text-align:center}.gate b{display:block}.gate small{display:block;font-size:12px;color:var(--muted)}.mini-label{font-size:12px;color:var(--muted);margin-bottom:10px}.bracket{margin-top:10px;border-top:1px solid var(--line);padding-top:10px;color:var(--muted);font-size:12px;text-align:center}.note{padding:16px 20px;border-left:3px solid var(--orange);background:var(--soft-orange);font-size:14px;margin-top:20px}.sim{display:grid;grid-template-columns:1fr 1.2fr;gap:32px;margin-top:28px}.controls{display:grid;gap:15px}.field label{display:block;font-size:13px;margin-bottom:6px}.field input[type=range]{width:100%;accent-color:var(--orange)}select{width:100%;background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:9px 12px}output{font-variant-numeric:tabular-nums}.bars{display:grid;gap:16px;align-content:center}.bar-head{display:flex;justify-content:space-between;gap:12px;font-size:13px;margin-bottom:6px}.track{height:16px;border-radius:4px;background:var(--gray);overflow:hidden}.fill{height:100%;background:var(--orange);width:0;transition:width .2s}.fill.green{background:var(--green)}.result{font-size:16px;font-weight:600;margin-top:2px}.assumption{font-size:12px;color:var(--muted);margin-top:16px}
+    .step-flow{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}.step-button{border:1px solid var(--line);border-radius:10px;padding:16px 10px;background:var(--paper);color:var(--ink);text-align:left;min-height:100px}.step-button[aria-pressed=true]{border:2px solid var(--orange);padding:15px 9px;background:var(--soft-orange)}.step-button small{color:var(--muted);display:block;font-size:12px}.step-button b{display:block;margin-top:6px;font-size:14px}.detail{padding:22px 0 4px;max-width:850px;min-height:122px}.detail p{font-size:14px;color:var(--muted)}.recover{display:grid;grid-template-columns:1fr 1fr;gap:24px}.recovery-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;margin:16px 0}.tag{padding:7px 11px;border-radius:6px;background:var(--gray)}.tag.ok{background:var(--soft-green)}.tag.retry{background:var(--soft-orange)}.recover p{font-size:13px;color:var(--muted)}.timeline{display:grid;grid-template-columns:repeat(5,1fr);gap:18px;margin-top:25px}.phase{border-top:3px solid var(--line);padding-top:14px}.phase:first-child{border-color:var(--orange)}.phase-number{font-size:12px;color:var(--orange)}.phase h3{margin:10px 0 7px}.phase p{font-size:13px;color:var(--muted);margin-bottom:12px}.duration{font-size:12px;display:inline-block;background:var(--gray);padding:4px 8px;border-radius:5px}.cutover{margin-top:26px;background:var(--paper);border-radius:12px;padding:22px;border:1px solid var(--line)}.decision-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px}.decision-grid p{font-size:14px;color:var(--muted)}.decision{padding:18px 0;border-top:1px solid var(--line)}.budget{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.budget strong{font-size:36px;font-weight:600;letter-spacing:-.04em}.sources{font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;margin-top:18px}footer{padding:26px 0 40px;font-size:12px;color:var(--muted)}[hidden]{display:none!important}
+    .node.compute{background:var(--gray);border-color:transparent}.platforms{display:grid;grid-template-columns:1fr 1fr;gap:24px}.resource-list{padding:0;list-style:none;font-size:13px}.resource-list li{padding:8px 0;border-bottom:1px solid var(--line)}.boundary{text-align:center;font-size:12px;color:var(--muted);padding:12px 0}.terraform-flow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:20px 0}.limit-table{width:100%;border-collapse:collapse;font-size:13px}.limit-table th,.limit-table td{text-align:left;padding:12px 8px;border-bottom:1px solid var(--line);vertical-align:top}.limit-table th{font-weight:600}.infra-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+    @media(max-width:850px){.compare,.sim,.platforms,.infra-grid{grid-template-columns:1fr}.lane-grid{grid-template-columns:1fr}.lane-grid>.arrow{transform:rotate(90deg)}.queue-stack{grid-template-columns:repeat(3,1fr)}.timeline{grid-template-columns:repeat(2,1fr)}.step-flow{grid-template-columns:repeat(3,1fr)}.roles{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:520px){.wrap{padding:0 18px}header{padding-top:24px}.topline{font-size:10px}.panel,.lane-map{padding:18px}.roles,.recover,.decision-grid{grid-template-columns:1fr}.rack{grid-template-columns:1fr}.article-row{grid-template-columns:repeat(2,1fr)}.step-flow{grid-template-columns:1fr 1fr}.timeline{grid-template-columns:1fr}.phase{display:grid;grid-template-columns:36px 1fr;gap:0 8px}.phase h3{margin-top:0}.phase p,.phase .duration{grid-column:2}.duration{justify-self:start}.section-head{gap:12px}.nav a{padding:7px 8px}h2{font-size:21px}.step-button{min-height:94px}.queue-stack{gap:5px}}
+    @media(prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#151c20;--paper:#1d272c;--ink:#e6eeec;--muted:#a9b8bb;--line:#3b484d;--orange:#ffab70;--soft-orange:#382c25;--green:#89d6c7;--soft-green:#203a35;--gray:#2e393e;--shadow:none}}
+    @media(prefers-reduced-motion:reduce){.fill{transition:none}}
+    @media print{body{background:white;color:black}.wrap{max-width:none;padding:0}.nav,.controls{display:none}.panel,.lane-map{box-shadow:none;break-inside:avoid}section{break-inside:avoid}.fill{print-color-adjust:exact}a{color:inherit}footer{padding-bottom:0}}
+
+.send-flow{display:grid;grid-template-columns:1fr 32px 1fr 32px 1fr;gap:10px;align-items:center}.branches{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px}.shared-map{display:grid;grid-template-columns:1.5fr 32px 1fr;gap:18px;align-items:center}.request-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.sim-controls{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:end;margin:22px 0}.sim-actions{display:flex;gap:10px;flex-wrap:wrap}.action{border:1px solid var(--orange);background:var(--orange);color:var(--bg);padding:10px 16px;border-radius:7px;font-weight:600;min-height:44px}.action.secondary{background:transparent;color:var(--ink);border-color:var(--line)}.action:disabled{opacity:.55;cursor:default}.sim-state{display:flex;gap:24px;flex-wrap:wrap;padding:18px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:22px;font-size:13px}.sim-state output{font-weight:600;color:var(--ink);padding-left:5px}.simulation-board{display:grid;grid-template-columns:1.1fr 1fr;gap:24px}.request-item{display:grid;grid-template-columns:1fr 90px 100px;align-items:center;gap:8px;padding:13px 0;border-bottom:1px solid var(--line);font-size:13px}.request-item small{color:var(--muted);display:block}.request-status{background:var(--gray);padding:4px 7px;border-radius:5px;text-align:center;font-size:12px}.request-status.done{background:var(--soft-green);color:var(--green)}.request-status.wait{background:var(--soft-orange);color:var(--orange)}.sim-log{padding-left:22px;color:var(--muted);font-size:13px}.sim-log li{margin-bottom:10px}.retry-path{max-width:720px;margin:22px auto}
+@media(max-width:850px){.send-flow,.shared-map,.simulation-board,.branches,.sim-controls{grid-template-columns:1fr}.send-flow>.arrow,.shared-map>.arrow{transform:rotate(90deg)}}
+@media(max-width:520px){.request-grid{grid-template-columns:1fr}.request-item{grid-template-columns:1fr 66px 80px}.sim-state{gap:10px 18px}.action{flex:1;padding:10px 12px}.sim-actions{width:100%}.limit-table{font-size:12px}.limit-table th,.limit-table td{padding:10px 5px}}
+@media print{.sim-controls{display:none}.action{display:none}}
+</style>
+</head>
+<body>
+<header class="wrap">
+  <div class="topline"><span class="brand">upto<span style="color:var(--orange)">.</span></span><span>GEMINI RATE CONTROL / 2026.10.10</span></div>
+  <p class="eyebrow">CLOUDFLARE GATE + VERCEL EXECUTOR</p>
+  <h1>すべてのGemini送信を、<br>ひとつの許可ゲートへ。</h1>
+  <p class="lead">並列記事・チャンク・統合・フォールバック・再試行を合算して制御。枠が空くまでCloudflareが待ち、Vercelは送信直前に許可を取得します。</p>
+  <div class="note"><b>現状：1実行内のRPM制御と429再試行は実装済み。分散制御はまだ提案段階です。</b><br>移行後の共有ゲート、TPM・RPD管理は未実装です。Google側の実クォータと容量は未確認のため、「429に絶対ならない」とは保証できません。</div>
+  <nav class="nav" aria-label="資料内ナビゲーション"><a href="#status">01 実装状況</a><a href="#flow">02 送信フロー</a><a href="#quota">03 何を数えるか</a><a href="#simulation">04 待機シミュレーション</a><a href="#retry">05 429と復旧</a><a href="#implementation">06 実装・検証要件</a></nav>
+</header>
+<main class="wrap">
+  <section id="status">
+    <div class="section-head"><span class="num">01</span><h2>実装済みの範囲と、追加する制御</h2></div>
+    <table class="limit-table"><thead><tr><th scope="col">対象</th><th scope="col">現在のTrigger / Node</th><th scope="col">Cloudflare + Vercel案</th></tr></thead><tbody>
+      <tr><th scope="row">RPM：回数 / 分</th><td>実装済み。既定5回/分<br>直近60秒の移動窓</td><td>DOで永続化し、全実行で共有する</td></tr>
+      <tr><th scope="row">共有する範囲</th><td>1つの要約器・1プロセス内<br>Triggerのバッチ同時実行は1件</td><td>Google project内の全Vercel invocation・run・対象モデル</td></tr>
+      <tr><th scope="row">TPM / RPD</th><td>制御は未実装</td><td>入力token枠と日次送信枠を追加する</td></tr>
+      <tr><th scope="row">429再試行</th><td>実装済み。追加retry既定2回<br>Retry-Afterまたはbackoff後、再度limiterへ</td><td>Cloudflareが待機とattemptを管理。Vercelに長いsleepを置かない</td></tr>
+    </tbody></table>
+    <p class="footnote">コード確認と既存の狭いVitest検証：2ファイル・11テスト成功。実API・分散ゲート・本番クォータの検証ではありません。既定5 RPMはアプリ設定で、Googleの契約上限ではありません。</p>
+  </section>
+
+  <section id="flow">
+    <div class="section-head"><span class="num">02</span><h2>各API呼び出しの直前に、許可を確認する</h2></div>
+    <div class="send-flow" role="img" aria-label="Cloudflare WorkflowがVercelへ1チャンクを依頼。Vercelが保存済み結果を確認し、共有ゲートへ認証付きで許可を要求。許可ならGeminiへ送信、枠不足ならCloudflareへ待機情報を返す。">
+      <div class="node cloud"><span class="mini-label">① Cloudflare Workflow</span><b>未完了のstageを選ぶ</b><small>1チャンク / 1統合をVercelへ依頼</small></div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="node compute"><span class="mini-label">② Vercel Node.js</span><b>送信前の準備</b><small>保存済み結果を確認<br>promptと入力token見積もり</small></div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="node cloud"><span class="mini-label">③ Cloudflare DO</span><b>共有ゲートで判定</b><small>RPM / TPM / RPD<br>cooldown / permit期限</small></div>
+    </div>
+    <div class="branches">
+      <div class="panel"><span class="pill">許可できる</span><h3 style="margin-top:14px">短い期限のpermitを返す</h3><div class="recovery-line"><span class="tag">Vercel：期限・IDを検証</span><span aria-hidden="true">→</span><span class="tag ok">Geminiへ即時送信</span><span aria-hidden="true">→</span><span class="tag">結果保存 → CF完了記録</span></div><p class="caption">許可された1リクエストだけ送る。HTTP再試行やモデル切替で同じpermitを使い回しません。</p></div>
+      <div class="panel"><span class="pill">許可できない</span><h3 style="margin-top:14px">待機情報をVercelへ返す</h3><div class="recovery-line"><span class="tag">Geminiは呼ばない</span><span aria-hidden="true">→</span><span class="tag retry">Vercelは終了</span><span aria-hidden="true">→</span><span class="tag">CF：sleep → 同じstageを再依頼</span></div><p class="caption">短い枠不足は次の許可時刻まで待つ。日次枠終了はリセットまで保留。Vercel内で待ち続けません。</p></div>
+    </div>
+    <div class="note"><b>許可の発行とGeminiの受信時刻は、完全には一致しません。</b><br>期限切れなら送信せず再取得。permit期限とネットワーク遅延・時計差を見込んだ送信間隔を検証します。未送信の予約も安易に返却せず、安全側に枠を消費します。</div>
+  </section>
+
+  <section id="quota">
+    <div class="section-head"><span class="num">03</span><h2>数える単位は「記事」ではなく「APIリクエスト」</h2></div>
+    <div class="shared-map" role="img" aria-label="記事Aのチャンク1、チャンク2、最終統合、記事Bの通常要約、モデルフォールバック、429再試行のすべてが同じGoogle projectのDOゲートへ入り、モデル別と全体の予算を共有する。">
+      <div><div class="mini-label">並列に到着するリクエスト</div><div class="request-grid"><span class="tag">記事A / チャンク1</span><span class="tag">記事A / チャンク2</span><span class="tag">記事A / 最終統合</span><span class="tag">記事B / 通常要約</span><span class="tag">重要→通常 / fallback</span><span class="tag retry">429後 / 再試行</span></div></div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="gate"><b>Google project単位のDO</b><small>モデル別の枠＋全体の保守的な枠<br>staging / productionも同じprojectなら共有</small></div>
+    </div>
+    <div class="roles"><div class="role"><h3>RPM：送信回数 / 分</h3><p>各attemptを数える。記事が4つのAPI呼び出しを使うなら4回分。単なる同時実行数の制限では守れません。</p></div><div class="role"><h3>TPM：入力token / 分</h3><p>本文とpromptを含む入力tokenを見積もり、安全余裕を持って予約。長い入力は、回数が少なくても上限に達します。</p></div><div class="role"><h3>RPD：送信回数 / 日</h3><p>日次枠を使い切ったら保留。Google側の日次リセットは太平洋時間0時。夏時間も考慮します。</p></div></div>
+    <div class="note"><b>API keyを増やしても、同じGoogle projectの枠は増えません。</b><br>実クォータはモデルと利用tierに依存します。同じprojectを使う別アプリがgateを通らない場合、その消費はローカルに把握できません。全利用をgateへ集約するか、余裕を残して監視します。</div>
+  </section>
+
+  <section id="simulation">
+    <div class="section-head"><span class="num">04</span><h2>7リクエストが待っているとき、どう送るか</h2></div>
+    <p class="caption">説明用の仮想時間シミュレーション。実APIには接続しません。5 RPMに対し13秒間隔で許可する例です。13秒は安全余裕を示す仮定で、確定設定ではありません。</p>
+    <div class="sim-controls"><div class="field"><label for="scenario">状況を選ぶ</label><select id="scenario"><option value="normal">正常：RPMに合わせて送信</option><option value="429">最初の送信で429：30秒待って再試行</option><option value="tpm">TPM残量不足：先行のtoken枠が空くまで待つ</option><option value="rpd">RPD枠終了：今日は送信しない</option></select></div><div class="sim-actions"><button type="button" id="advance" class="action">次の送信判定へ</button><button type="button" id="reset" class="action secondary">最初に戻す</button></div></div>
+    <div class="sim-state" aria-live="polite" aria-atomic="true"><span>仮想時刻 <output id="clock">0秒</output></span><span>直近60秒のAPI送信 <output id="window-count">0 / 5回</output></span><span>完了 <output id="completed">0 / 7件</output></span></div>
+    <div class="simulation-board"><div class="request-list" id="request-list" aria-label="リクエストの送信状況"></div><div class="panel"><h3 id="sim-heading">枠を共有して、順番に送信</h3><p id="sim-message" class="caption" aria-live="polite">最初の判定は0秒。次の許可は13秒後です。</p><div class="mini-label">判定ログ（最新4件）</div><ol id="sim-log" class="sim-log"><li>7件のリクエストが送信準備完了</li></ol><p class="footnote">対象は送信準備が整った7件の例です。実際のチャンク・統合の依存順序はWorkflowが管理します。</p></div></div>
+    <p class="assumption">TPMケースの仮定：上限10,000、既存予約9,000、各入力2,000 tokens。60秒後に既存予約が解放される例。RPDケースは残量0。モデルの実上限やGoogle側の内部計測を再現するものではありません。</p>
+  </section>
+
+  <section id="retry">
+    <div class="section-head"><span class="num">05</span><h2>429が返っても、そのまま再送しない</h2></div>
+    <div class="retry-path" role="img" aria-label="Geminiから429。Vercelがretry-after情報を返して終了。Cloudflareが共有cooldownとattemptを記録してsleep。期限と再試行回数を確認し、同じoperationの結果照会と新しいgate許可を経て再送。">
+      <div class="node compute"><b>Gemini → 429</b><small>Vercelがエラーを分類</small></div><div class="arrow" aria-hidden="true">↓</div>
+      <div class="node cloud"><b>待機情報とattemptを記録</b><small>Retry-After / 公開されるretry情報を優先<br>なければ上限付きbackoff＋jitter</small></div><div class="arrow" aria-hidden="true">↓</div>
+      <div class="node cloud"><b>CF Workflowでsleep</b><small>対象クォータの共有cooldownも更新<br>他の実行が即座に送り続けない</small></div><div class="arrow" aria-hidden="true">↓</div>
+      <div class="node compute"><b>Vercelを再依頼 → 新しいgate判定</b><small>同じoperation ID / 新しい認証nonce・permit</small></div>
+    </div>
+    <div class="recover"><div class="decision"><h3>短い制限・一時的な429</h3><p>待機して限定回数だけretry。初期案は追加2回。枠不足でGeminiを呼ばなかった待機は、API attemptとは別に管理します。</p></div><div class="decision"><h3>日次枠・入力が大きすぎる</h3><p>日次枠ならリセットまで保留。1入力だけでTPM枠を超えるなら分割・縮小が必要です。短いsleepを繰り返しても解決しません。</p></div></div>
+    <p class="footnote">上限を超えるretry、認証・設定エラー、回復不能な出力は失敗として記録して通知。他の記事は継続します。SDK、Workflow、Queueで同じAPI retryを重ねません。</p>
+  </section>
+
+  <section id="implementation">
+    <div class="section-head"><span class="num">06</span><h2>「制御できる」と判断するための実装・検証</h2></div>
+    <div class="infra-grid"><div class="panel"><h3>共有ゲートへ追加する状態</h3><ul class="resource-list"><li>project ID / model / RPM・TPM・RPDの設定</li><li>直近のpermitとtoken予約 / 日次カウント</li><li>cooldownの終了時刻 / permitの有効期限</li><li>同じattemptの重複許可を防ぐID</li><li>SQLiteへの永続化と再起動後の復旧</li></ul></div><div class="panel"><h3>必須の検証</h3><ul class="resource-list"><li>複数Vercel invocationでも合算上限を守る</li><li>チャンク・統合・fallback・retryが全てgateを通る</li><li>TPM不足・RPD終了・429で正しく保留する</li><li>permit失効・時計差・通信遅延・再起動</li><li>SDK内部retryとgate外の利用を検出する</li></ul></div></div>
+    <div class="note"><b>現在は「回数制御が一部実装済み」。移行後の分散制御はこれから実装する設計です。</b><br>実クォータをAI Studioで確認し、入力token見積もりと共有状態の動作を検証します。Google側の実際の容量は変動するため、予防的な制御に加えて429の回復経路を持ちます。</div>
+    <div class="sources"><a href="cloudflare-batch-migration.html">全体構成の図解</a><a href="cloudflare-batch-migration-plan.md">改訂移行計画</a><a href="https://ai.google.dev/gemini-api/docs/rate-limits">Google：レート制限</a><a href="https://ai.google.dev/gemini-api/docs/troubleshooting">Google：エラー対応</a><a href="https://developers.cloudflare.com/workflows/build/sleeping-and-retrying/">Cloudflare：待機と再試行</a></div>
+  </section>
+</main>
+<footer class="wrap">Upto / Gemini rate control · 2026-10-10 · 現行コード確認＋提案の図解。Google実クォータ・本番環境は未検証。ここに表示する共有ゲートは未実装。</footer>
+
+<script>
+(() => {
+  const scenario = document.getElementById('scenario');
+  const advance = document.getElementById('advance');
+  const labels = ['記事A / チャンク', '記事B / チャンク', '記事C / 統合', '記事D / 通常要約', '記事E / 再要約', '記事F / fallback', '記事G / チャンク'];
+  const list = document.getElementById('request-list');
+  list.setAttribute('role', 'list');
+  const rows = labels.map(label => {
+    const row = document.createElement('div'); row.className = 'request-item'; row.setAttribute('role', 'listitem');
+    const name = document.createElement('span'); name.textContent = label;
+    const time = document.createElement('span'); time.className = 'caption';
+    const status = document.createElement('span'); status.className = 'request-status';
+    row.append(name, time, status); list.append(row); return { row, time, status };
+  });
+  let state;
+  function log(message) { state.log.push(message); }
+  function render() {
+    document.getElementById('clock').value = state.now + '秒';
+    const recent = state.sent.filter(time => state.now - time < 60);
+    document.getElementById('window-count').value = recent.length + ' / 5回';
+    const completed = state.requests.filter(request => request.done).length;
+    document.getElementById('completed').value = completed + ' / 7件';
+    document.getElementById('sim-heading').textContent = state.heading;
+    document.getElementById('sim-message').textContent = state.message;
+    state.requests.forEach((request, index) => {
+      rows[index].time.textContent = request.times.length ? request.times.join('→') + '秒' : '—';
+      rows[index].status.textContent = request.status;
+      rows[index].status.className = 'request-status' + (request.done ? ' done' : request.status !== '未送信' ? ' wait' : '');
+      rows[index].row.setAttribute('aria-label', labels[index] + '：' + request.status + '、送信時刻 ' + rows[index].time.textContent);
+    });
+    const logList = document.getElementById('sim-log'); logList.replaceChildren();
+    state.log.slice(-4).forEach(message => { const item = document.createElement('li'); item.textContent = message; logList.append(item); });
+    advance.disabled = state.blocked || completed === 7;
+    advance.textContent = completed === 7 ? '全リクエスト完了' : state.blocked ? '日次枠リセットまで保留' : state.resumeAt > state.now ? state.resumeAt + '秒へ進めて再判定' : '次の送信判定へ';
+  }
+  function reset() {
+    state = { mode: scenario.value, now: 0, nextPermit: 0, resumeAt: 0, cooldown: 0,
+      dayRemaining: scenario.value === 'rpd' ? 0 : 100, sent: [],
+      tokens: scenario.value === 'tpm' ? [{ time: 0, amount: 9000 }] : [],
+      requests: labels.map(() => ({ done: false, attempts: 0, times: [], status: '未送信' })), blocked: false,
+      log: ['7件のリクエストが送信準備完了'], heading: '枠を共有して、順番に送信', message: '最初の判定は0秒。次の許可は13秒後です。' };
+    if (state.mode === '429') { state.heading = '最初のAPI送信が429になる例'; state.message = '失敗した送信も数え、30秒のcooldown後に新しく許可を取り直します。'; }
+    if (state.mode === 'tpm') { state.heading = '回数の枠が空いていても、token不足'; state.message = 'TPM残量1,000に対して入力2,000。初回は送信せず、60秒後に枠を再判定します。'; }
+    if (state.mode === 'rpd') { state.heading = '日次枠が残っていない例'; state.message = '送信判定すると保留になります。短いretryではなく、日次リセットまで待ちます。'; }
+    render();
+  }
+  function next() {
+    if (state.blocked || state.requests.every(request => request.done)) return;
+    const previous = state.now;
+    state.now = Math.max(state.now, state.nextPermit, state.cooldown, state.resumeAt); state.resumeAt = 0;
+    if (state.now > previous) log(state.now + '秒：Cloudflareが待機を終えて再判定');
+    const index = state.requests.findIndex(request => !request.done), request = state.requests[index];
+    if (state.dayRemaining <= 0) {
+      state.blocked = true; state.requests.filter(item => !item.done).forEach(item => { item.status = '日次保留'; });
+      state.heading = 'RPD枠終了：Geminiへ送信しない';
+      state.message = 'Cloudflareが次の太平洋時間0時まで保留。例をやり直すには「最初に戻す」か状況を変更してください。';
+      log(state.now + '秒：日次残量0。API送信なし'); render(); return;
+    }
+    state.tokens = state.tokens.filter(token => state.now - token.time < 60);
+    const tokenLimit = state.mode === 'tpm' ? 10000 : 1000000;
+    const usedTokens = state.tokens.reduce((sum, token) => sum + token.amount, 0);
+    if (usedTokens + 2000 > tokenLimit) {
+      state.resumeAt = Math.min(...state.tokens.map(token => token.time + 60)); request.status = 'TPM待機';
+      state.heading = 'TPM枠不足：Geminiへ送信しない';
+      state.message = '既存のtoken予約が解放される' + state.resumeAt + '秒までCloudflareがsleepし、再判定します。';
+      log(state.now + '秒：入力2,000に対し残量' + (tokenLimit - usedTokens).toLocaleString('ja-JP') + '。送信なし'); render(); return;
+    }
+    state.sent.push(state.now); state.tokens.push({ time: state.now, amount: 2000 });
+    state.dayRemaining -= 1; state.nextPermit = state.now + 13; request.attempts += 1; request.times.push(state.now);
+    if (state.mode === '429' && index === 0 && request.attempts === 1) {
+      request.status = '429→待機'; state.cooldown = state.now + 30; state.resumeAt = state.cooldown;
+      state.heading = '429：即時再送せず30秒待つ';
+      state.message = '最初の送信は枠に計上済み。Vercelは終了し、Cloudflareが共有cooldownを記録してsleepします。';
+      log(state.now + '秒：送信 → 429。次のgate判定は30秒以降');
+    } else {
+      request.done = true; request.status = request.attempts > 1 ? '再試行完了' : '完了';
+      state.heading = '新しい許可を取得して送信'; state.message = labels[index] + 'を' + state.now + '秒に送信。次の許可は' + state.nextPermit + '秒以降です。';
+      log(state.now + '秒：' + labels[index] + '送信 → 結果を保存');
+      if (state.requests.every(item => item.done)) { state.heading = '7リクエストが完了'; state.message = '並列に準備しても送信は共有枠で制御。再試行も同じ枠を消費します。'; }
+    }
+    render();
+  }
+  scenario.addEventListener('change', reset); advance.addEventListener('click', next);
+  document.getElementById('reset').addEventListener('click', reset); reset();
+})();
+</script>
+</body>
+</html>

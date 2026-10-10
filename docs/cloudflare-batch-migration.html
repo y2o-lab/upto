@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Upto — Cloudflare管理・Vercel実行・Terraformの図解</title>
+  <style>
+    :root{color-scheme:light;--bg:#f7f6f2;--paper:#fff;--ink:#202b31;--muted:#5d6c73;--line:#d9dedb;--orange:#af480f;--soft-orange:#fff0e5;--green:#176f65;--soft-green:#e8f4ef;--gray:#eef0ed;--shadow:0 8px 32px #202b3108}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;line-height:1.7}a{color:var(--green);text-underline-offset:4px}button,input,select{font:inherit}button,select{cursor:pointer}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--orange);outline-offset:4px}
+    .wrap{max-width:1160px;margin:auto;padding:0 32px}header{padding:44px 0 26px}.topline{display:flex;justify-content:space-between;gap:16px;align-items:center;font-size:12px;letter-spacing:.1em}.brand{font-size:20px;font-weight:700;letter-spacing:-.04em}.pill{background:var(--soft-orange);color:var(--orange);border-radius:30px;padding:5px 12px;font-size:12px}.eyebrow{font-size:12px;letter-spacing:.12em;color:var(--orange);font-weight:700;margin:32px 0 12px}h1{font-size:clamp(28px,4.5vw,48px);letter-spacing:-.045em;line-height:1.35;margin:0 0 18px}h2{font-size:24px;letter-spacing:-.025em;margin:0 0 10px}h3{font-size:17px;margin:0 0 10px}p{margin:0 0 16px}.lead{max-width:760px;color:var(--muted);font-size:16px}.nav{display:flex;flex-wrap:wrap;gap:8px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:16px 0;margin-top:28px}.nav a{text-decoration:none;color:var(--ink);font-size:13px;padding:6px 12px;border-radius:6px}.nav a:hover{background:var(--gray)}section{padding:36px 0;border-bottom:1px solid var(--line);scroll-margin-top:20px}.section-head{display:flex;gap:16px;align-items:baseline;margin-bottom:22px}.num{color:var(--orange);font-size:12px;font-weight:700;letter-spacing:.1em}.caption{color:var(--muted);font-size:13px}.compare{display:grid;grid-template-columns:1fr 1.45fr;gap:24px}.panel{background:var(--paper);padding:24px;border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}.panel-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;gap:8px;font-size:12px;color:var(--muted)}.node{padding:15px 16px;border:1px solid var(--line);border-radius:9px;background:var(--paper);text-align:center;min-width:0}.node b{display:block;font-size:15px}.node small{display:block;color:var(--muted);font-size:12px;margin-top:3px}.node.cloud{background:var(--soft-orange);border-color:transparent}.node.keep{background:var(--soft-green);border-color:transparent}.arrow{text-align:center;color:var(--muted);padding:5px;font-size:20px;line-height:1.2}.rack{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.chip{background:var(--gray);padding:8px;border-radius:6px;text-align:center;font-size:12px}.footnote{margin-top:18px;font-size:13px;color:var(--muted)}.scope{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}.scope span{padding:6px 12px;background:var(--soft-green);font-size:12px;border-radius:20px}.roles{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:22px}.role{border-top:3px solid var(--orange);padding-top:14px}.role h3{margin-bottom:5px}.role p{font-size:13px;color:var(--muted)}
+    .lane-map{background:var(--paper);padding:24px;border:1px solid var(--line);border-radius:14px}.lane-grid{display:grid;grid-template-columns:150px 1fr 36px 190px;gap:14px;align-items:center}.queue-stack{display:grid;gap:6px}.article-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.article{background:var(--soft-orange);padding:16px 8px;text-align:center;border-radius:8px;font-size:13px}.article b{display:block}.gate{background:var(--soft-green);border-radius:10px;padding:20px;text-align:center}.gate b{display:block}.gate small{display:block;font-size:12px;color:var(--muted)}.mini-label{font-size:12px;color:var(--muted);margin-bottom:10px}.bracket{margin-top:10px;border-top:1px solid var(--line);padding-top:10px;color:var(--muted);font-size:12px;text-align:center}.note{padding:16px 20px;border-left:3px solid var(--orange);background:var(--soft-orange);font-size:14px;margin-top:20px}.sim{display:grid;grid-template-columns:1fr 1.2fr;gap:32px;margin-top:28px}.controls{display:grid;gap:15px}.field label{display:block;font-size:13px;margin-bottom:6px}.field input[type=range]{width:100%;accent-color:var(--orange)}select{width:100%;background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:9px 12px}output{font-variant-numeric:tabular-nums}.bars{display:grid;gap:16px;align-content:center}.bar-head{display:flex;justify-content:space-between;gap:12px;font-size:13px;margin-bottom:6px}.track{height:16px;border-radius:4px;background:var(--gray);overflow:hidden}.fill{height:100%;background:var(--orange);width:0;transition:width .2s}.fill.green{background:var(--green)}.result{font-size:16px;font-weight:600;margin-top:2px}.assumption{font-size:12px;color:var(--muted);margin-top:16px}
+    .step-flow{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}.step-button{border:1px solid var(--line);border-radius:10px;padding:16px 10px;background:var(--paper);color:var(--ink);text-align:left;min-height:100px}.step-button[aria-pressed=true]{border:2px solid var(--orange);padding:15px 9px;background:var(--soft-orange)}.step-button small{color:var(--muted);display:block;font-size:12px}.step-button b{display:block;margin-top:6px;font-size:14px}.detail{padding:22px 0 4px;max-width:850px;min-height:122px}.detail p{font-size:14px;color:var(--muted)}.recover{display:grid;grid-template-columns:1fr 1fr;gap:24px}.recovery-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;margin:16px 0}.tag{padding:7px 11px;border-radius:6px;background:var(--gray)}.tag.ok{background:var(--soft-green)}.tag.retry{background:var(--soft-orange)}.recover p{font-size:13px;color:var(--muted)}.timeline{display:grid;grid-template-columns:repeat(5,1fr);gap:18px;margin-top:25px}.phase{border-top:3px solid var(--line);padding-top:14px}.phase:first-child{border-color:var(--orange)}.phase-number{font-size:12px;color:var(--orange)}.phase h3{margin:10px 0 7px}.phase p{font-size:13px;color:var(--muted);margin-bottom:12px}.duration{font-size:12px;display:inline-block;background:var(--gray);padding:4px 8px;border-radius:5px}.cutover{margin-top:26px;background:var(--paper);border-radius:12px;padding:22px;border:1px solid var(--line)}.decision-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px}.decision-grid p{font-size:14px;color:var(--muted)}.decision{padding:18px 0;border-top:1px solid var(--line)}.budget{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.budget strong{font-size:36px;font-weight:600;letter-spacing:-.04em}.sources{font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;margin-top:18px}footer{padding:26px 0 40px;font-size:12px;color:var(--muted)}[hidden]{display:none!important}
+    .node.compute{background:var(--gray);border-color:transparent}.platforms{display:grid;grid-template-columns:1fr 1fr;gap:24px}.resource-list{padding:0;list-style:none;font-size:13px}.resource-list li{padding:8px 0;border-bottom:1px solid var(--line)}.boundary{text-align:center;font-size:12px;color:var(--muted);padding:12px 0}.terraform-flow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:20px 0}.limit-table{width:100%;border-collapse:collapse;font-size:13px}.limit-table th,.limit-table td{text-align:left;padding:12px 8px;border-bottom:1px solid var(--line);vertical-align:top}.limit-table th{font-weight:600}.infra-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+    @media(max-width:850px){.compare,.sim,.platforms,.infra-grid{grid-template-columns:1fr}.lane-grid{grid-template-columns:1fr}.lane-grid>.arrow{transform:rotate(90deg)}.queue-stack{grid-template-columns:repeat(3,1fr)}.timeline{grid-template-columns:repeat(2,1fr)}.step-flow{grid-template-columns:repeat(3,1fr)}.roles{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:520px){.wrap{padding:0 18px}header{padding-top:24px}.topline{font-size:10px}.panel,.lane-map{padding:18px}.roles,.recover,.decision-grid{grid-template-columns:1fr}.rack{grid-template-columns:1fr}.article-row{grid-template-columns:repeat(2,1fr)}.step-flow{grid-template-columns:1fr 1fr}.timeline{grid-template-columns:1fr}.phase{display:grid;grid-template-columns:36px 1fr;gap:0 8px}.phase h3{margin-top:0}.phase p,.phase .duration{grid-column:2}.duration{justify-self:start}.section-head{gap:12px}.nav a{padding:7px 8px}h2{font-size:21px}.step-button{min-height:94px}.queue-stack{gap:5px}}
+    @media(prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#151c20;--paper:#1d272c;--ink:#e6eeec;--muted:#a9b8bb;--line:#3b484d;--orange:#ffab70;--soft-orange:#382c25;--green:#89d6c7;--soft-green:#203a35;--gray:#2e393e;--shadow:none}}
+    @media(prefers-reduced-motion:reduce){.fill{transition:none}}
+    @media print{body{background:white;color:black}.wrap{max-width:none;padding:0}.nav,.controls{display:none}.panel,.lane-map{box-shadow:none;break-inside:avoid}section{break-inside:avoid}.fill{print-color-adjust:exact}a{color:inherit}footer{padding-bottom:0}}
+  </style>
+</head>
+<body>
+<header class="wrap">
+  <div class="topline"><span class="brand">upto<span style="color:var(--orange)">.</span></span><span>ARCHITECTURE NOTE / 2026.10.10 <span class="pill">改訂案</span></span></div>
+  <p class="eyebrow">CLOUDFLARE CONTROL + VERCEL EXECUTION / TERRAFORM</p>
+  <h1>管理はCloudflare、<br>実処理はVercelへ。</h1>
+  <p class="lead">Cron・キュー・実行状態・チャンク進捗はCloudflare。RSS解析・本文抽出・Gemini呼び出しはVercelのNode.js。インフラの構成と設定はTerraformで管理します。</p>
+  <nav class="nav" aria-label="資料内ナビゲーション"><a href="#architecture">01 責務の分担</a><a href="#parallel">02 並列化と上限</a><a href="#article">03 チャンクと復旧</a><a href="#migration">04 移行の順序</a><a href="#decisions">05 無料枠・判断点</a><a href="#terraform">06 Terraform管理</a></nav>
+</header>
+<main class="wrap">
+  <section id="architecture">
+    <div class="section-head"><span class="num">01</span><h2>Cloudflareが指示し、Vercelが実行する</h2></div>
+    <div class="platforms">
+      <div class="panel">
+        <div class="panel-label"><b>Cloudflare</b><span class="pill">制御・状態の永続化</span></div>
+        <div class="node cloud"><b>Cron Worker</b><small>定期起動 / スケジュールはTerraform管理</small></div><div class="arrow" aria-hidden="true">↓</div>
+        <div class="node cloud"><b>D1 → outbox → Queues</b><small>記事の状態・送信予定・投入待ち・再配送</small></div><div class="arrow" aria-hidden="true">↓</div>
+        <div class="rack"><div class="node cloud"><b>記事A</b><small>Workflow</small></div><div class="node cloud"><b>記事B</b><small>Workflow</small></div><div class="node cloud"><b>記事C…</b><small>Workflow</small></div></div>
+        <div class="arrow" aria-hidden="true">↓</div><div class="node cloud"><b>実行するstage・chunkを選ぶ</b><small>HTTP結果を記録 / 失敗時は待って再開</small></div>
+        <div class="boundary">認証済みHTTPでVercelへ →<br>← 完了結果のID・待機情報を受け取る</div>
+        <div class="node cloud"><b>Durable Objects</b><small>全体の実行枠 / Gemini送信枠を共有</small></div>
+      </div>
+      <div class="panel">
+        <div class="panel-label"><b>Vercel Node.js Functions</b><span>1回 = 1段階 / 1チャンク</span></div>
+        <div class="node compute"><b>RSS/APIの取得・解析</b><small>XMLの解析、候補の正規化と保存</small></div><div class="arrow" aria-hidden="true">↓</div>
+        <div class="node compute"><b>本文抽出・チャンク生成</b><small>jsdom / Readability / 分割計算</small></div><div class="arrow" aria-hidden="true">↓</div>
+        <div class="node compute"><b>1チャンク要約 → 統合・検証</b><small>Gemini送信直前にCloudflareから許可取得</small></div><div class="arrow" aria-hidden="true">↓</div>
+        <div class="node compute"><b>最終保存</b><small>記事・本文・要約・metricsを1 transactionで確定</small></div><div class="arrow" aria-hidden="true">↓</div>
+        <div class="node keep"><b>既存PostgreSQL / Drizzle</b><small>本文・チャンクpayload・生成結果・最終記事</small></div>
+        <p class="footnote">各矢印の次の実行はCloudflareが指示します。Vercelで全段階を一括実行しません。</p>
+      </div>
+    </div>
+    <div class="roles"><div class="role"><h3>Cloudflareに置くもの</h3><p>job、work、chunkの進捗、attempt、参照ID、lease、キュー、再試行、送信許可。</p></div><div class="role"><h3>Vercelに置くもの</h3><p>Node.jsでCPUを使う解析・加工・検証、SDK呼び出し、PostgreSQL保存。</p></div><div class="role"><h3>Terraformに置くもの</h3><p>両サービスのリソース、bindings、Cron、Queue設定、domainとDNS。環境ごとに分離。</p></div></div>
+    <div class="scope"><span>既存Web・PostgreSQL・Geminiを維持</span><span>Containers・Vercel Workflowsを使わない</span><span>Hyperdriveは不要：DB接続はVercelから</span></div>
+  </section>
+
+  <section id="parallel">
+    <div class="section-head"><span class="num">02</span><h2>実行場所を分けても、上限は全体で共有</h2></div>
+    <div class="lane-map" role="img" aria-label="Cloudflareが投入待ちと全体4記事の実行枠を管理し、Vercelの各処理がGemini送信直前にCloudflareの共通ゲートへ許可を求める。数値は初期案。">
+      <div class="lane-grid">
+        <div><div class="mini-label">Cloudflare Queue</div><div class="queue-stack"><span class="chip">記事E</span><span class="chip">記事F</span><span class="chip">記事G…</span></div></div>
+        <div><div class="mini-label">Vercelで実処理 / 全体4記事まで（初期案）</div><div class="article-row"><div class="article"><b>記事A</b>本文抽出</div><div class="article"><b>記事B</b>チャンク1</div><div class="article"><b>記事C</b>チャンク2</div><div class="article"><b>記事D</b>保存</div></div><div class="bracket">Cloudflareが実行枠と進捗を管理。Vercelの自動スケールを無制限に使わない。</div></div>
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="gate"><b>Cloudflare送信ゲート</b><small>Vercelが送信直前に許可取得<br>Geminiの現在設定：5回 / 分</small></div>
+      </div>
+    </div>
+    <div class="note"><b>長い待機はCloudflareへ返す。</b><br>送信枠がなければVercelは待機情報を返して終了。Cloudflare Workflowがsleepして再開します。許可の有効期限とネットワーク遅延を見込んだ安全余裕はPoCで検証します。</div>
+    <div class="sim">
+      <div class="controls"><h3>並列数と送信上限を比べる</h3>
+        <div class="field"><label for="parallel-count">要約リクエストの同時実行枠：<output id="parallel-value" for="parallel-count">4</output></label><input id="parallel-count" type="range" min="1" max="12" value="4"></div>
+        <div class="field"><label for="rpm">Gemini送信上限（仮定）</label><select id="rpm"><option value="5">5回 / 分 — 現在のアプリ設定</option><option value="20">20回 / 分 — 比較用の仮定</option><option value="60">60回 / 分 — 比較用の仮定</option></select></div>
+        <div class="field"><label for="calls">1記事あたりのAPI回数</label><select id="calls"><option value="1">1回 — 短い記事の例</option><option value="4">4回 — 長文チャンク＋統合の例</option></select></div>
+      </div>
+      <div class="bars" aria-live="polite" aria-atomic="true">
+        <div><div class="bar-head"><span>同時実行枠だけで決まる処理量</span><output id="capacity">20 記事 / 分</output></div><div class="track"><div id="capacity-bar" class="fill"></div></div></div>
+        <div><div class="bar-head"><span>Geminiの送信枠で決まる処理量</span><output id="quota">5 記事 / 分</output></div><div class="track"><div id="quota-bar" class="fill green"></div></div></div>
+        <div class="result" id="result">持続的な処理量の上限：5 記事 / 分</div><p class="caption" id="bottleneck">この条件では、Geminiの送信上限がボトルネックです。</p>
+      </div>
+    </div>
+    <p class="assumption">説明用の単純モデル：API応答12秒、記事内のAPI呼び出しは順次、取得・保存・サービス間通信とTPM/RPDを除外。棒の尺度は最大60記事/分。実測値・速度保証ではありません。</p>
+  </section>
+
+  <section id="article">
+    <div class="section-head"><span class="num">03</span><h2>チャンクの進捗はCloudflareに残す</h2></div>
+    <p class="caption">分割の計算はVercel、次に実行するチャンクの選択と完了記録はCloudflareです。各段階を選ぶと詳細を表示します。</p>
+    <div class="step-flow" role="group" aria-label="記事の処理段階">
+      <button class="step-button" type="button" data-step="0" aria-pressed="true" aria-controls="step-detail"><small>Cloudflare → Vercel</small><b>処理権を取得</b></button>
+      <button class="step-button" type="button" data-step="1" aria-pressed="false" aria-controls="step-detail"><small>Vercel → Cloudflare</small><b>本文抽出・分割</b></button>
+      <button class="step-button" type="button" data-step="2" aria-pressed="false" aria-controls="step-detail"><small>1チャンクずつ実行</small><b>チャンク要約</b></button>
+      <button class="step-button" type="button" data-step="3" aria-pressed="false" aria-controls="step-detail"><small>全チャンク完了後</small><b>統合・検証</b></button>
+      <button class="step-button" type="button" data-step="4" aria-pressed="false" aria-controls="step-detail"><small>Vercel → Cloudflare</small><b>保存・完了記録</b></button>
+    </div>
+    <div id="step-detail" class="detail" aria-live="polite" aria-atomic="true"><h3 id="detail-title">二重起動と二重保存を防ぐ</h3><p id="detail-text">Cloudflareが実行枠と安定したWorkflow IDを管理。Vercelはstageごとのoperation IDで保存済み結果を確認し、同じ処理への再配送を安全に扱います。</p></div>
+    <div class="recover">
+      <div class="panel"><h3>チャンク2で失敗</h3><div class="recovery-line"><span class="tag ok">D1：chunk1 完了</span><span aria-hidden="true">→</span><span class="tag retry">chunk2 再試行</span><span aria-hidden="true">→</span><span class="tag">chunk3 未実行</span></div><p>Cloudflareが再試行時刻を管理し、Vercelにchunk2を再依頼。本文と生成結果はPostgreSQLに保存し、大きいpayloadをCloudflareへ返しません。</p></div>
+      <div class="panel"><h3>保存成功後にHTTP応答を失う</h3><div class="recovery-line"><span class="tag ok">Vercel：結果を保存</span><span aria-hidden="true">→</span><span class="tag retry">応答を失う</span><span aria-hidden="true">→</span><span class="tag">同じoperation IDで照会</span></div><p>再実行では保存済みresult IDを返し、Cloudflareが進捗を確定。D1とPostgreSQLの間に分散transactionはないため、定期照合でも回復します。</p></div>
+    </div>
+    <p class="footnote">Cloudflare↔Vercelは双方向で認証。期限・nonce・環境を検証します。LLM応答そのものを失った場合の二重課金を完全に防げるとは限りません。</p>
+  </section>
+
+  <section id="migration">
+    <div class="section-head"><span class="num">04</span><h2>HTTP連携とTerraformを先に検証する</h2></div>
+    <p class="caption">改訂案の工数は暫定で10〜18作業日＋観察期間。PoCで再見積もりします。</p>
+    <div class="timeline">
+      <div class="phase"><span class="phase-number">01</span><h3>Hybrid PoC</h3><p>Vercel Node実行、認証HTTP、CPU、deadline、provider schema、初回作成順序を確認。</p><span class="duration">最初の判断点</span></div>
+      <div class="phase"><span class="phase-number">02</span><h3>DB・API契約</h3><p>operation、payload、claim、保存transaction、version付きrequest/response。</p><span class="duration">TDDで検証</span></div>
+      <div class="phase"><span class="phase-number">03</span><h3>基盤・stage実装</h3><p>Cloudflare制御、Vercel実処理、Terraform modulesとCI、secret注入。</p><span class="duration">環境を分離</span></div>
+      <div class="phase"><span class="phase-number">04</span><h3>staging比較</h3><p>長文、429、応答喪失、再配送、redeploy、無料枠と状態回復を確認。</p><span class="duration">実測で判定</span></div>
+      <div class="phase"><span class="phase-number">05</span><h3>本番切替</h3><p>Triggerの旧runを終了し、少数検証後にCloudflare Cronを有効化。</p><span class="duration">複数runを観察</span></div>
+    </div>
+    <div class="cutover"><h3>切替は片方だけを稼働</h3><div class="recovery-line"><span class="tag">Trigger定期起動を停止</span><span aria-hidden="true">→</span><span class="tag">旧run終了</span><span aria-hidden="true">→</span><span class="tag retry">CF → Vercelを少数検証</span><span aria-hidden="true">→</span><span class="tag ok">Cloudflare Cronを有効化</span></div><p class="caption">切り戻し：CFの新規投入を停止 → WorkflowとVercel operationを完了または停止・照合 → Trigger再開。D1の未処理workとQueueを保持します。</p></div>
+  </section>
+
+  <section id="decisions">
+    <div class="section-head"><span class="num">05</span><h2>無料枠を狙える構成。稼働の可否は実測で判断</h2></div>
+    <table class="limit-table"><thead><tr><th scope="col">場所</th><th scope="col">主な制約</th><th scope="col">対策</th></tr></thead><tbody>
+      <tr><th scope="row">Cloudflare</th><td>Workflow CPU 10ms/step<br>3,000 steps/日</td><td>小さいIDと状態更新のみ。HTML/XML解析・SDKを持ち込まない。制御処理のCPUも計測。</td></tr>
+      <tr><th scope="row">Vercel Hobby</th><td>1 invocation 最大5分<br>月4 CPU時間 / 360 GB時間等</td><td>1段階・1チャンクに分割。内部deadlineは初期案240秒。長いsleepはCFへ返す。</td></tr>
+      <tr><th scope="row">Queues / D1 / DO</th><td>操作・保存・稼働の無料枠<br>Queue保持24時間</td><td>投入量・再配送を制限。D1で長期状態を保持。DOはGemini応答待ちをしない。</td></tr>
+    </tbody></table>
+    <div class="decision-grid"><div class="decision"><h3>Cloudflare料金 $0 を優先</h3><p>有料Containersは使いません。CloudflareとVercel両方の無料枠を実測し、余裕を持った記事数と並列数に設定します。GeminiとDBの料金は別です。</p></div><div class="decision"><h3>Vercelの利用条件と実行上限</h3><p>Hobbyは非商用の個人利用向け。起動はCloudflareなのでVercel Cronの頻度制限は使いませんが、各Functionの5分制限と月間usage制限は残ります。</p></div></div>
+    <div class="note"><b>次の一歩：小さいHTTP制御＋1記事で検証。</b><br>Vercelでjsdom/SDKが動くこと、CFの制御が10msに収まること、期限切れ・応答喪失・429から回復すること、Terraform再applyで不要な差分がないことを確認します。</div>
+  </section>
+
+  <section id="terraform">
+    <div class="section-head"><span class="num">06</span><h2>両サービスのインフラをTerraformで管理</h2></div>
+    <div class="infra-grid">
+      <div class="panel"><h3>Cloudflareリソース</h3><ul class="resource-list"><li>Worker / bindings / observability</li><li>Cron / Workflow定義</li><li>Queue / DLQ / consumer / retry設定</li><li>Durable Object SQLite class・migrations</li><li>D1 database / DNS</li></ul></div>
+      <div class="panel"><h3>Vercelリソース</h3><ul class="resource-list"><li>collector専用project / Git連携</li><li>Node.js・build設定 / domain</li><li>環境別の非secret設定</li><li>既存Webとdomainを保持</li><li>アプリのコードはCIでdeploy</li></ul></div>
+    </div>
+    <div class="terraform-flow"><span class="tag">fmt / validate</span><span aria-hidden="true">→</span><span class="tag">planをレビュー</span><span aria-hidden="true">→</span><span class="tag">apply</span><span aria-hidden="true">→</span><span class="tag">migration / secrets / deploy</span><span aria-hidden="true">→</span><span class="tag ok">疎通確認後にCron有効化</span></div>
+    <div class="decision-grid"><div class="decision"><h3>既存infraとR2 stateを拡張</h3><p>batch用moduleとstate keyを追加し、staging/productionを分離。既存Webと外部管理のstate bucketを再作成しません。固定provider versionのschemaとbootstrapをPoCで検証。</p></div><div class="decision"><h3>状態データとsecret値は別に管理</h3><p>業務データ・Workflow instanceはruntime、schema migrationはCI。runtime secret値は各secret storeへ注入し、Terraform stateに入れません。同じリソースをWranglerと二重管理しません。</p></div></div>
+    <div class="sources"><a href="gemini-rate-limit-flow.html">Geminiの送信制御を図解</a><a href="cloudflare-batch-migration-plan.md">改訂調査計画</a><a href="adr/0008-cloudflare-control-vercel-execution.md">ADR-0008（Proposed）</a><a href="terraform-vercel-cloudflare-runbook.md">既存Terraform運用</a><a href="https://developers.cloudflare.com/workflows/reference/limits/">Cloudflare制限</a><a href="https://vercel.com/docs/functions/configuring-functions/duration">Vercel実行時間</a><a href="https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs">Cloudflare provider</a><a href="https://registry.terraform.io/providers/vercel/vercel/latest/docs">Vercel provider</a></div>
+  </section>
+</main>
+<footer class="wrap">Upto / Cloudflare control + Vercel execution · Terraform管理 · 2026-10-10時点の改訂提案。実装・deploy・applyは未実施。無料枠内の稼働は実測を条件とします。</footer>
+<script>
+  (() => {
+    const parallel = document.getElementById('parallel-count');
+    const rpm = document.getElementById('rpm');
+    const calls = document.getElementById('calls');
+    const fmt = value => new Intl.NumberFormat('ja-JP', { maximumFractionDigits: 2 }).format(value);
+    function update() {
+      const concurrency = Number(parallel.value), requests = Number(rpm.value), perArticle = Number(calls.value);
+      const capacity = concurrency * 60 / 12 / perArticle, quota = requests / perArticle;
+      document.getElementById('parallel-value').value = concurrency;
+      document.getElementById('capacity').value = fmt(capacity) + ' 記事 / 分';
+      document.getElementById('quota').value = fmt(quota) + ' 記事 / 分';
+      document.getElementById('capacity-bar').style.width = (capacity / 60 * 100) + '%';
+      document.getElementById('quota-bar').style.width = (quota / 60 * 100) + '%';
+      document.getElementById('result').textContent = '持続的な処理量の上限：' + fmt(Math.min(capacity, quota)) + ' 記事 / 分';
+      document.getElementById('bottleneck').textContent = capacity > quota ? 'この条件では、Geminiの送信上限がボトルネックです。' : capacity < quota ? 'この条件では、同時実行枠がボトルネックです。' : 'この条件では、同時実行枠とGeminiの送信上限が一致します。';
+    }
+    parallel.addEventListener('input', update); rpm.addEventListener('change', update); calls.addEventListener('change', update); update();
+    const steps = [
+      ['二重起動と二重保存を防ぐ', 'Cloudflareが実行枠と安定したWorkflow IDを管理。Vercelはstageごとのoperation IDで保存済み結果を確認し、同じ処理への再配送を安全に扱います。'],
+      ['分割するのはVercel、進捗を管理するのはCloudflare', 'VercelがjsdomとReadabilityで本文を抽出してチャンクを生成し、PostgreSQLへ保存。参照IDと件数だけCloudflareへ返し、D1に各チャンクの未実行状態を登録します。大きいmanifestはページ単位で渡します。'],
+      ['Cloudflareが未完了チャンクを選び、Vercelへ依頼', 'Vercelは指定された1チャンクだけを要約。API送信直前にCloudflareの共通gateへ許可を求めます。枠不足なら待機情報を返して終了し、Workflowがsleep。保存済み生成結果は再利用します。'],
+      ['全チャンク完了後、Vercelで統合・Zod検証', 'Cloudflareがチャンクの完了を確認して統合APIを呼びます。Vercelが保存済みの要約を統合し、Zodで出力を検証。統合やモデルfallbackも送信ゲートの対象です。'],
+      ['保存成功を確認し、Cloudflareで完了状態を確定', 'Vercelが記事・本文・要約・metricsを1 transactionで保存。CloudflareがD1を完了へ更新します。二つのDBをまたぐtransactionはないため、応答喪失やD1更新失敗は同じoperation IDの結果照会と定期照合で回復します。']
+    ];
+    const buttons = Array.from(document.querySelectorAll('[data-step]'));
+    buttons.forEach(button => button.addEventListener('click', () => {
+      buttons.forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+      const detail = steps[Number(button.dataset.step)];
+      document.getElementById('detail-title').textContent = detail[0];
+      document.getElementById('detail-text').textContent = detail[1];
+    }));
+  })();
+</script>
+</body>
+</html>

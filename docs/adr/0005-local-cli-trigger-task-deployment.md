@@ -34,3 +34,4 @@ Coolify は Trigger.dev 本体の運用に利用するが、collector task の d
 ## 追記
 
 - 2026-08-08: 初版作成。ADR-0004 の task deployment 経路を置き換える。
+- 2026-10-10: Terraformによるリソース管理とCloudflare/Vercelのデプロイへの移行案をADR-0008（Proposed）に記録。採用・切替までは本ADRの現行デプロイ経路を継続する。

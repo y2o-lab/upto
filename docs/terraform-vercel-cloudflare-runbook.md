@@ -1,6 +1,6 @@
 # Terraform による Vercel / Cloudflare DNS 運用手順書
 
-更新日: 2026-08-27
+更新日: 2026-10-10
 
 この手順書は Upto Web のVercel project、GitHub連携、独自ドメイン、Cloudflareで管理しているVercel向けDNS recordと必要なTXT検証レコードをTerraform管理へ移すためのものです。Vercel projectはpnpm workspace内の`apps/web`をNext.jsとしてbuildし、GitHubへのpushでdeploymentを作成します。
 
@@ -15,6 +15,12 @@
 | Terraform remote state | Cloudflare R2 | S3 backend |
 
 既存 Vercel project をTerraformへ移す場合は、先にprojectをimportします。Terraformはproject名、Next.js/pnpm workspace用のbuild設定、GitHub repository、production branch、domain associationを管理します。`DATABASE_URL`などのruntime secretはTerraform stateに保存せず、Vercel projectのsecret storeに残します。`environment`属性はignoreしているため、この構成が既存環境変数を削除・変更することはありません。新規projectではapply後、最初のGit pushより前にVercel dashboardでruntime secretを設定してください。
+
+## collector移行時の追加要件
+
+本書のZone Read / DNS Edit tokenはWeb/DNS運用向けである。**ユーザー申告として、現在のActions用トークンは移行先の新規リソース作成権限が不足しており、collector初回Plan / Apply前に更新・再発行とGitHub Environment Secretsの差し替えが必要。** Worker/DO、Workflow、Queue/consumer、D1、Vercel collector projectの作成・deploy・migrationに必要な権限を別途確認する。R2 credentialsは別管理で、新state keyとlock objectへの権限を確認する。
+
+[ローカル品質保証・Actions設計](cloudflare-vercel-local-quality-plan.md)に全機能のローカルテスト、権限表、更新手順を定義する。collectorのPlan / ApplyはGitHub Actionsで行い、確認済みの保存PlanをEnvironment承認後に適用する。以下で説明する既存Web workflowはApply時に再計画する現行動作であり、collector移行時には保存Plan方式を実装する。今回の文書更新ではworkflowと実トークンは変更していない。
 
 ## 事前準備
 
