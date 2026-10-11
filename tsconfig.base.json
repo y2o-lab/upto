@@ -17,7 +17,8 @@
     "noUncheckedIndexedAccess": true,
     "paths": {
       "@upto/db": ["./packages/db/src/index.ts"],
-      "@upto/domain": ["./packages/domain/src/index.ts"]
+      "@upto/domain": ["./packages/domain/src/index.ts"],
+      "@upto/domain/batch": ["./packages/domain/src/batch/index.ts"]
     },
     "resolveJsonModule": true,
     "skipLibCheck": true,

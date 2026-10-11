@@ -7,11 +7,15 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./batch": {
+      "types": "./src/batch/index.ts",
+      "import": "./src/batch/index.ts"
     }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit false",
-    "test": "vitest run",
+    "test": "vitest run --root ../.. packages/domain/src",
     "typecheck": "tsc -b --noEmit tsconfig.json"
   },
   "dependencies": {
