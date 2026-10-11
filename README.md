@@ -2,6 +2,10 @@
 
 Japanese IT news summary app.
 
+## Architecture
+
+[システム構成・アーキテクチャ図](docs/system-architecture.md)に、現在の稼働構成とCloudflare管理・Vercel実行へのバッチ移行先、データの分担、記事処理フローを記載する。
+
 ## Requirements
 
 - Node.js 24 LTS for normal development and CI

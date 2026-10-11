@@ -82,6 +82,9 @@ importers:
       '@types/jsdom':
         specifier: 30.0.0
         version: 30.0.0
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
       trigger.dev:
         specifier: 4.6.3
         version: 4.6.3(typescript@7.0.2)

@@ -1,7 +1,7 @@
 # Cloudflare / Vercel移行のローカル品質保証とActions設計
 
 作成日: 2026-10-10
-状態: 移行実装の受入仕様。以下の新コマンド・tests・workflowsは未実装。
+状態: 移行実装の受入仕様。共通契約・双方向署名・PG operationと一部ローカル試験を実装中。全機能ゲート・CF runtime・新workflowsは未完成。実装済みコマンドとtest対応は[runbook](cloudflare-vercel-collector-runbook.md)を参照。
 
 [移行実装計画](cloudflare-vercel-migration-implementation-plan.md)を補完する。全機能の正常系・境界・障害回復をローカルで再現するテストを、機能実装と同じPRで追加する。ADR-0008はProposedのまま。本書の追加でdeploy、Apply、実migration、旧Trigger停止は行わない。
 

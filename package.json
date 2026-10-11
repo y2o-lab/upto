@@ -21,10 +21,11 @@
     "trigger:deploy:prod": "pnpm --dir apps/collector run trigger:deploy:prod",
     "trigger:deploy:staging": "pnpm --dir apps/collector run trigger:deploy:staging",
     "trigger:dev": "pnpm --dir apps/collector run trigger:dev",
-    "typecheck": "tsc -b",
+    "typecheck": "tsc -b && tsc -p apps/collector/vercel.tsconfig.json",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "test:local:up": "docker compose -p upto-collector-tests -f compose.test.yml up -d --wait",
-    "test:local:down": "docker compose -p upto-collector-tests -f compose.test.yml down"
+    "test:local:down": "docker compose -p upto-collector-tests -f compose.test.yml down",
+    "build:collector:node": "pnpm --filter @upto/collector build:node"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

@@ -12,7 +12,9 @@
     "trigger:deploy:prod": "trigger deploy --config trigger.config.ts --builder trigger-host --network host --env prod --skip-update-check --skip-telemetry",
     "trigger:deploy:staging": "trigger deploy --config trigger.config.ts --builder trigger-host --network host --env staging --skip-update-check --skip-telemetry",
     "trigger:dev": "trigger dev --config trigger.config.ts --skip-update-check --skip-telemetry",
-    "typecheck": "pnpm --dir ../.. exec tsc -b apps/collector/tsconfig.json"
+    "typecheck": "pnpm --dir ../.. exec tsc -b apps/collector/tsconfig.json",
+    "build:node": "node scripts/build-node.mjs",
+    "typecheck:vercel": "tsc -p vercel.tsconfig.json"
   },
   "dependencies": {
     "@google/genai": "2.23.0",
@@ -27,6 +29,7 @@
   },
   "devDependencies": {
     "@types/jsdom": "30.0.0",
+    "esbuild": "0.28.2",
     "trigger.dev": "4.6.3",
     "typescript": "7.0.2"
   }

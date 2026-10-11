@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "composite": false, "noEmit": true, "rootDir": "../..", "types": ["node"] },
+  "include": ["api/**/*.ts", "src/http/**/*.ts", "src/stages/**/*.ts"],
+  "exclude": ["**/*.test.ts"]
+}

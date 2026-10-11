@@ -17,6 +17,7 @@ node_modules/
 out/
 dist/
 build/
+build-node/
 coverage/
 storybook-static/
 .trigger/
