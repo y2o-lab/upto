@@ -5,3 +5,5 @@ export * from "./nonces.js";
 export * from "./manifests.js";
 export * from "./payloads.js";
 export * from "./results.js";
+export * from "./extraction.js";
+export * from "./discovery.js";

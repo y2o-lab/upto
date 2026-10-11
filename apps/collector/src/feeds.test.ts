@@ -1,8 +1,59 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { fetchFeedItems, type FeedTarget } from "./feeds.js";
 
 describe("fetchFeedItems", () => {
+  it.each(["<rss><channel>", "<html><body>upstream error</body></html>", "not XML"])(
+    "rejects invalid feed %s",
+    async (body) => {
+      await expect(
+        fetchFeedItems(
+          {
+            kind: "rss",
+            name: "fixture",
+            siteUrl: "https://fixture.example",
+            url: "https://fixture.example/feed",
+          },
+          1,
+          async () => new Response(body),
+        ),
+      ).rejects.toThrow("FEED_XML_INVALID");
+    },
+  );
+  it("accepts a valid empty feed", async () => {
+    expect(
+      await fetchFeedItems(
+        {
+          kind: "rss",
+          name: "fixture",
+          siteUrl: "https://fixture.example",
+          url: "https://fixture.example/feed",
+        },
+        1,
+        async () =>
+          new Response('<rss version="2.0"><channel><title>fixture</title></channel></rss>'),
+      ),
+    ).toEqual([]);
+  });
+  it("rejects a private feed through the default transport before any global fetch", async () => {
+    const unrestricted = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(""));
+    try {
+      await expect(
+        fetchFeedItems(
+          {
+            kind: "rss",
+            name: "fixture",
+            siteUrl: "https://127.0.0.1",
+            url: "https://127.0.0.1/feed",
+          },
+          1,
+        ),
+      ).rejects.toThrow("FETCH_ADDRESS_REJECTED");
+      expect(unrestricted).not.toHaveBeenCalled();
+    } finally {
+      unrestricted.mockRestore();
+    }
+  });
   it("parses RSS 1.0 RDF feeds such as Hatena Bookmark", async () => {
     const feed: FeedTarget = {
       kind: "rss",
@@ -79,4 +130,54 @@ describe("fetchFeedItems", () => {
       },
     ]);
   });
+});
+
+it("bounds Hacker News item HTTP concurrency and continues after one failed item", async () => {
+  const feed: FeedTarget = {
+    kind: "hacker-news",
+    name: "fixture",
+    siteUrl: "https://fixture.example",
+    topStoriesUrl: "https://fixture.example/top",
+    itemUrlPrefix: "https://fixture.example/item/",
+  };
+  let active = 0;
+  let peak = 0;
+  const items = await fetchFeedItems(feed, 9, async (input) => {
+    const url = String(input);
+    if (url.endsWith("/top")) return new Response(JSON.stringify([1, 2, 3, 4, 5, 6, 7, 8, 9]));
+    active++;
+    peak = Math.max(peak, active);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      if (url.endsWith("/5.json")) return new Response(null, { status: 500 });
+      return new Response(
+        JSON.stringify({
+          id: 1,
+          type: "story",
+          title: "fixture",
+          url: "https://fixture.example/article",
+        }),
+      );
+    } finally {
+      active--;
+    }
+  });
+  expect(peak).toBe(4);
+  expect(active).toBe(0);
+  expect(items).toHaveLength(8);
+});
+
+it("reports total Hacker News item transport failure instead of a successful empty feed", async () => {
+  const feed: FeedTarget = {
+    kind: "hacker-news",
+    name: "fixture",
+    siteUrl: "https://fixture.example",
+    topStoriesUrl: "https://fixture.example/top",
+    itemUrlPrefix: "https://fixture.example/item/",
+  };
+  await expect(
+    fetchFeedItems(feed, 2, async (input) =>
+      String(input).endsWith("/top") ? new Response("[1,2]") : new Response(null, { status: 503 }),
+    ),
+  ).rejects.toThrow("HN_ITEMS_FETCH_FAILED");
 });

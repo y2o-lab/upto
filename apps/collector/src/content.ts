@@ -1,6 +1,8 @@
 import { Readability } from "@mozilla/readability";
 import { JSDOM } from "jsdom";
 
+import { createSafeFetcher } from "./http/safe-fetch.js";
+
 export type ExtractedContent = {
   contentHtml: string | null;
   contentText: string;
@@ -8,12 +10,13 @@ export type ExtractedContent = {
 };
 
 type FetchLike = typeof fetch;
+const safeFetch = createSafeFetcher();
 
 export async function extractArticleContent(
   url: string,
   fallbackText: string,
   fallbackHtml: string | null,
-  fetcher: FetchLike = fetch,
+  fetcher: FetchLike = safeFetch,
 ): Promise<ExtractedContent> {
   if (isEnoughText(fallbackText)) {
     return {

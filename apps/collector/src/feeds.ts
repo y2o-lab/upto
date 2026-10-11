@@ -1,4 +1,7 @@
-import { XMLParser } from "fast-xml-parser";
+import { XMLParser, XMLValidator } from "fast-xml-parser";
+import pLimit from "p-limit";
+
+import { createSafeFetcher } from "./http/safe-fetch.js";
 
 type RssFeedTarget = {
   kind: "rss";
@@ -28,6 +31,7 @@ export type FeedItem = {
 };
 
 type FetchLike = typeof fetch;
+const safeFetch = createSafeFetcher();
 
 const parser = new XMLParser({
   attributeNamePrefix: "@_",
@@ -75,7 +79,7 @@ export function feedEndpointUrl(feed: FeedTarget): string {
 export async function fetchFeedItems(
   feed: FeedTarget,
   maxItems: number,
-  fetcher: FetchLike = fetch,
+  fetcher: FetchLike = safeFetch,
 ): Promise<FeedItem[]> {
   if (feed.kind === "hacker-news") {
     return fetchHackerNewsItems(feed, maxItems, fetcher);
@@ -90,7 +94,17 @@ async function fetchRssItems(
   fetcher: FetchLike,
 ): Promise<FeedItem[]> {
   const xml = await fetchText(feed.url, fetcher);
+  if (XMLValidator.validate(xml) !== true) throw new Error("FEED_XML_INVALID");
   const document = parser.parse(xml) as Record<string, unknown>;
+  if (
+    !isRecord(document) ||
+    !(
+      readPath(document, ["rss", "channel"]) !== undefined ||
+      document.feed !== undefined ||
+      document["rdf:RDF"] !== undefined
+    )
+  )
+    throw new Error("FEED_XML_INVALID");
   const rssItems = readPath(document, ["rss", "channel", "item"]);
   const atomItems = readPath(document, ["feed", "entry"]);
   const rdfItems = readPath(document, ["rdf:RDF", "item"]);
@@ -109,17 +123,21 @@ async function fetchHackerNewsItems(
 ): Promise<FeedItem[]> {
   const ids = (await fetchJson(feed.topStoriesUrl, fetcher)) as unknown;
   if (!Array.isArray(ids)) {
-    throw new Error("Hacker News topstories response was not an array.");
+    throw new Error("HN_TOPSTORIES_INVALID");
   }
 
-  const stories = await Promise.all(
+  if (ids.some((id) => !Number.isSafeInteger(id) || Number(id) < 1))
+    throw new Error("HN_TOPSTORIES_INVALID");
+  const limit = pLimit(4);
+  const stories = await Promise.allSettled(
     ids
       .slice(0, maxItems)
-      .map(async (id) => fetchJson(`${feed.itemUrlPrefix}${String(id)}.json`, fetcher)),
+      .map((id) => limit(() => fetchJson(`${feed.itemUrlPrefix}${String(id)}.json`, fetcher))),
   );
-
+  if (stories.length && stories.every((result) => result.status === "rejected"))
+    throw new Error("HN_ITEMS_FETCH_FAILED");
   return stories
-    .map((raw) => parseHackerNewsItem(raw))
+    .flatMap((result) => (result.status === "fulfilled" ? [parseHackerNewsItem(result.value)] : []))
     .filter((item): item is FeedItem => item !== null);
 }
 
@@ -133,7 +151,7 @@ async function fetchText(url: string, fetcher: FetchLike): Promise<string> {
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch ${url}: ${response.status} ${response.statusText}`);
+    throw new Error("FEED_FETCH_FAILED");
   }
 
   return response.text();
@@ -148,10 +166,14 @@ async function fetchJson(url: string, fetcher: FetchLike): Promise<unknown> {
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch ${url}: ${response.status} ${response.statusText}`);
+    throw new Error("FEED_FETCH_FAILED");
   }
 
-  return response.json();
+  try {
+    return await response.json();
+  } catch {
+    throw new Error("FEED_JSON_INVALID");
+  }
 }
 
 function parseRssOrAtomItem(raw: unknown): FeedItem | null {

@@ -5,6 +5,7 @@ import type { CollectorConfig } from "./config.js";
 
 import { extractArticleContent } from "./content.js";
 import { feedEndpointUrl, fetchFeedItems, type FeedItem, type FeedTarget } from "./feeds.js";
+import { createSafeFetcher } from "./http/safe-fetch.js";
 import { createPersistence, type ManagedPersistence, type Persistence } from "./persistence.js";
 import { createGeminiSummarizer, type Summarizer } from "./summarizer.js";
 
@@ -133,7 +134,7 @@ export async function runCollector(input: RunCollectorInput): Promise<RunCollect
           },
         },
       });
-    const fetcher = input.dependencies?.fetcher ?? fetch;
+    const fetcher = input.dependencies?.fetcher ?? createSafeFetcher();
     return await runCollectorWithPersistence({
       config: input.config,
       fetcher,
