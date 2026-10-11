@@ -6,6 +6,7 @@ export default defineConfig({
       reporter: ["text", "html"],
     },
     environment: "node",
+    exclude: ["**/node_modules/**", "**/.git/**", "**/*.integration.test.ts"],
     include: ["apps/**/*.test.ts", "packages/**/*.test.ts"],
   },
 });

@@ -1,0 +1,2 @@
+ALTER TABLE "collector_discoveries" ADD COLUMN "feed_job_id" uuid;--> statement-breakpoint
+ALTER TABLE "collector_discoveries" ADD CONSTRAINT "collector_discoveries_feed_job_id_crawl_jobs_id_fk" FOREIGN KEY ("feed_job_id") REFERENCES "public"."crawl_jobs"("id") ON DELETE restrict ON UPDATE no action;

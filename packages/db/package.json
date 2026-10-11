@@ -7,6 +7,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./collector": {
+      "types": "./src/collector/index.ts",
+      "import": "./src/collector/index.ts"
     }
   },
   "scripts": {
@@ -14,8 +18,9 @@
     "db:generate": "drizzle-kit generate",
     "db:diagnose-migration": "node scripts/diagnose-migration-connection.mjs",
     "db:migrate": "drizzle-kit migrate",
-    "test": "vitest run",
-    "typecheck": "tsc -b --noEmit tsconfig.json"
+    "test": "vitest run --root ../.. packages/db/src",
+    "typecheck": "tsc -b tsconfig.json",
+    "test:integration": "tsc -p ../../tsconfig.integration.json && vitest run --root ../.. --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@upto/domain": "workspace:0.1.0",

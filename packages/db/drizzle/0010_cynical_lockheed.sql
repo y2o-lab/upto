@@ -1,0 +1,1 @@
+ALTER TABLE "collector_discoveries" ADD COLUMN "input_hash" text;

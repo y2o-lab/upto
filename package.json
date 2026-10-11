@@ -22,7 +22,9 @@
     "trigger:deploy:staging": "pnpm --dir apps/collector run trigger:deploy:staging",
     "trigger:dev": "pnpm --dir apps/collector run trigger:dev",
     "typecheck": "tsc -b",
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test"
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "test:local:up": "docker compose -p upto-collector-tests -f compose.test.yml up -d --wait",
+    "test:local:down": "docker compose -p upto-collector-tests -f compose.test.yml down"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

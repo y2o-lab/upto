@@ -1,0 +1,1 @@
+ALTER TABLE "collector_operations" ADD COLUMN "generation_epoch" bigint;

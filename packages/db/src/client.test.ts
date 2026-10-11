@@ -55,3 +55,28 @@ describe("database client", () => {
     expect(getDb(databaseUrl)).toBe(getDb(databaseUrl));
   });
 });
+
+describe("database statement deadlines", () => {
+  it("bounds runtime statements and connection acquisition", () => {
+    expect(createPoolConfig("postgres://dummy:dummy@localhost/upto_collector_test")).toMatchObject({
+      statement_timeout: 15000,
+      connectionTimeoutMillis: 10000,
+    });
+    expect(
+      createPoolConfig("postgres://dummy:dummy@localhost/upto_collector_test", {
+        statementTimeoutMs: 500,
+        connectionTimeoutMs: 400,
+      }),
+    ).toMatchObject({ statement_timeout: 500, connectionTimeoutMillis: 400 });
+  });
+  it.each([0, -1, NaN, Infinity, 15001, 1.5])(
+    "rejects invalid statement timeout %s",
+    (statementTimeoutMs) => {
+      expect(() =>
+        createPoolConfig("postgres://dummy:dummy@localhost/upto_collector_test", {
+          statementTimeoutMs,
+        }),
+      ).toThrow("statementTimeoutMs");
+    },
+  );
+});

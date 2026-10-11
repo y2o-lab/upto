@@ -10,6 +10,8 @@ const defaultDbState = globalThis as typeof globalThis & {
 
 export type CreateDbOptions = {
   max?: number;
+  statementTimeoutMs?: number;
+  connectionTimeoutMs?: number;
   sslCa?: string;
 };
 
@@ -33,7 +35,8 @@ export function createPoolConfig(databaseUrl: string, options: CreateDbOptions =
   return {
     allowExitOnIdle: true,
     connectionString: sslCa ? withoutSslConnectionParameters(url) : databaseUrl,
-    connectionTimeoutMillis: 10_000,
+    connectionTimeoutMillis: readTimeout(options.connectionTimeoutMs, 10000, "connectionTimeoutMs"),
+    statement_timeout: readTimeout(options.statementTimeoutMs, 15000, "statementTimeoutMs"),
     idleTimeoutMillis: 10_000,
     max,
     maxLifetimeSeconds: 300,
@@ -131,4 +134,11 @@ function withoutSslConnectionParameters(url: URL): string {
     connectionUrl.searchParams.delete(name);
   }
   return connectionUrl.toString();
+}
+
+function readTimeout(value: number | undefined, maximum: number, name: string): number {
+  const milliseconds = value ?? maximum;
+  if (!Number.isInteger(milliseconds) || milliseconds < 1 || milliseconds > maximum)
+    throw new Error(`${name} must be a positive integer no greater than ${maximum}.`);
+  return milliseconds;
 }

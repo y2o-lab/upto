@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_USER: upto_test
+      POSTGRES_PASSWORD: upto_test
+      POSTGRES_DB: upto_collector_test
+    ports:
+      - "127.0.0.1:55439:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U upto_test -d upto_collector_test"]
+      interval: 1s
+      timeout: 3s
+      retries: 30

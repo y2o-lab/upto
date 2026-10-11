@@ -1,0 +1,2 @@
+ALTER TABLE "collector_candidates" DROP CONSTRAINT "collector_candidate_disposition";--> statement-breakpoint
+ALTER TABLE "collector_candidates" ADD CONSTRAINT "collector_candidate_disposition" CHECK ("collector_candidates"."disposition" IN ('process', 'alreadyPublished', 'failed'));

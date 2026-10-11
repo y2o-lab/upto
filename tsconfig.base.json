@@ -18,7 +18,8 @@
     "paths": {
       "@upto/db": ["./packages/db/src/index.ts"],
       "@upto/domain": ["./packages/domain/src/index.ts"],
-      "@upto/domain/batch": ["./packages/domain/src/batch/index.ts"]
+      "@upto/domain/batch": ["./packages/domain/src/batch/index.ts"],
+      "@upto/db/collector": ["./packages/db/src/collector/index.ts"]
     },
     "resolveJsonModule": true,
     "skipLibCheck": true,
