@@ -67,7 +67,7 @@ const recordSchema = z.object({
 });
 export type BatchLogRecord = z.input<typeof recordSchema>;
 export type BatchObserver = (record: BatchLogRecord) => Promise<void>;
-export type SlackConfig = { token: string; channel: string };
+export type SlackConfig = { token: string; channel: string; mentionIds?: string[] };
 export function readSlackConfig(
   environment: NodeJS.ProcessEnv = process.env,
 ): SlackConfig | undefined {
@@ -81,7 +81,13 @@ export function readSlackConfig(
     !/^[CG][A-Z0-9]{5,63}$/.test(channel)
   )
     throw new Error("SLACK_CONFIGURATION_INVALID");
-  return { token, channel };
+  const mentions = environment.SLACK_MENTION_IDS?.trim();
+  if (!mentions) return { token, channel };
+  const parsed = z
+    .array(z.string().regex(/^[UWS][A-Z0-9]{5,63}$/))
+    .safeParse(mentions.split(",").map((id) => id.trim()));
+  if (!parsed.success) throw new Error("SLACK_CONFIGURATION_INVALID");
+  return { token, channel, mentionIds: [...new Set(parsed.data)] };
 }
 const infrastructureWaits = new Set([
   "TOKEN_COUNT_UNAVAILABLE",
@@ -184,6 +190,11 @@ export function createBatchObserver(
     }
     pending.add(key);
     try {
+      const mentions = (options.slack.mentionIds ?? [])
+        .map((id) => (id.startsWith("S") ? `<!subteam^${id}>` : `<@${id}>`))
+        .join(" ");
+      const text = `collector 障害通知\n${JSON.stringify(record)}\n初動: ${recovery(record)}`;
+      const escapedText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       const response = await fetcher("https://slack.com/api/chat.postMessage", {
         method: "POST",
         redirect: "error",
@@ -194,8 +205,10 @@ export function createBatchObserver(
         },
         body: JSON.stringify({
           channel: options.slack.channel,
-          text: `collector 障害通知\n${JSON.stringify(record)}\n初動: ${recovery(record)}`,
-          mrkdwn: false,
+          text: mentions ? `${mentions}\n${escapedText}` : text,
+          mrkdwn: Boolean(mentions),
+          parse: "none",
+          link_names: false,
           unfurl_links: false,
           unfurl_media: false,
         }),

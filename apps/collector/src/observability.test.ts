@@ -21,6 +21,58 @@ it("validates paired optional Slack settings without exposing values", () => {
     { token: "xoxb-fixture", channel: "C123ABC" },
   );
 });
+it("accepts optional comma-separated user and user group IDs, trimming and deduplicating", () => {
+  const environment = { SLACK_BOT_TOKEN: "xoxb-fixture", SLACK_CHANNEL_ID: "C123ABC" };
+  expect(readSlackConfig({ ...environment, SLACK_MENTION_IDS: "  " })).toEqual({
+    token: "xoxb-fixture",
+    channel: "C123ABC",
+  });
+  expect(
+    readSlackConfig({ ...environment, SLACK_MENTION_IDS: " U123ABC, W456DEF, S789GHI, U123ABC " }),
+  ).toEqual({
+    token: "xoxb-fixture",
+    channel: "C123ABC",
+    mentionIds: ["U123ABC", "W456DEF", "S789GHI"],
+  });
+  expect(readSlackConfig({ SLACK_MENTION_IDS: "U123ABC" })).toBeUndefined();
+});
+it.each([
+  "@someone",
+  "<!channel>",
+  "C123ABC",
+  "U123ABC,,S789GHI",
+  "U123ABC,",
+  "U123ABC,<@U456DEF>",
+])("rejects invalid mention configuration without exposing its value: %s", (mentionIds) => {
+  expect(() =>
+    readSlackConfig({
+      SLACK_BOT_TOKEN: "xoxb-fixture",
+      SLACK_CHANNEL_ID: "C123ABC",
+      SLACK_MENTION_IDS: mentionIds,
+    }),
+  ).toThrow("SLACK_CONFIGURATION_INVALID");
+});
+it("sends configured mentions without including untrusted input or logging recipients", async () => {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ ok: true }));
+  const lines: string[] = [];
+  const observe = createBatchObserver({
+    slack: {
+      token: "fixture-private-token",
+      channel: "C123ABC",
+      mentionIds: ["U123ABC", "W456DEF", "S789GHI"],
+    },
+    write: (line) => lines.push(line),
+    fetcher,
+  });
+  await observe({ ...incident, prompt: "<@U999ABC> & <!channel>" } as typeof incident);
+  const body = JSON.parse(String(fetcher.mock.calls[0]![1]?.body));
+  expect(body.text).toMatch(/^<@U123ABC> <@W456DEF> <!subteam\^S789GHI>\ncollector 障害通知\n/);
+  expect(body.text).not.toMatch(/U999ABC|<!channel>/);
+  expect(body.mrkdwn).toBe(true);
+  expect(body.parse).toBe("none");
+  expect(body.link_names).toBe(false);
+  expect(lines.join("")).not.toMatch(/U123ABC|W456DEF|S789GHI/);
+});
 it("writes JSON and sends only safe fields with recovery guidance, deduplicating replays", async () => {
   const lines: string[] = [];
   const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ ok: true }));
@@ -40,6 +92,8 @@ it("writes JSON and sends only safe fields with recovery guidance, deduplicating
   expect(url).toBe("https://slack.com/api/chat.postMessage");
   expect(init?.signal).toBeInstanceOf(AbortSignal);
   expect(init?.redirect).toBe("error");
+  expect(JSON.parse(String(init?.body)).mrkdwn).toBe(false);
+  expect(JSON.parse(String(init?.body)).text).toMatch(/^collector 障害通知\n/);
   expect(String(init?.body)).toContain("自動再送しない");
   expect(String(init?.body)).toContain(incident.operationKey);
   expect(lines.map((line) => JSON.parse(line))).toEqual(

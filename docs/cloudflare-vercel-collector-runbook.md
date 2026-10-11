@@ -449,12 +449,24 @@ PG/通信障害は既知のdriver codeを`causeCode`へ分類する。
 
 - `SLACK_BOT_TOKEN`: Slack AppのBot User OAuth Token（`xoxb-...`）。署名用Signing Secretとは異なる。
 - `SLACK_CHANNEL_ID`: 通知先channel ID（`C...` / `G...`）。チャンネル名ではなくIDを使う。
+- `SLACK_MENTION_IDS`（任意）: メンション先のユーザーID（`U...` / `W...`）と
+  ユーザーグループID（`S...`）をカンマ区切りで指定する。
+  例: `SLACK_MENTION_IDS=U123ABC,U456DEF,S789GHI`。前後の空白と重複IDは除去する。
+  未指定・空欄ならメンションなし。表示名、`@name`、`<@ID>`、空の要素は指定しない。
+
+メンション指定時は通知の先頭へ各宛先を追加する。
+[`Slackのメンション仕様`](https://docs.slack.dev/messaging/formatting-message-text/)に従い、
+ユーザーは`<@ID>`、ユーザーグループは`<!subteam^ID>`として送信する。
+本文はエスケープし、表示名による自動メンション変換は無効にする。
+IDの存在・所属・通知可否はSlack側の設定に依存する。
 
 Botに`chat:write`を付与し、通知先の部屋へ招待する。
 [`chat.postMessage`公式仕様](https://docs.slack.dev/reference/methods/chat.postMessage/)に従い、
 固定のSlack APIへBearer認証でJSON送信する。両方空ならSlack通知を無効にし、ログは継続する。
 片方だけ、または不正な形式の設定は`SLACK_CONFIGURATION_INVALID`をログへ残し、
 バッチ処理は継続する。secret変更後は新しいruntime instanceへ反映させる。
+メンション先が不正な形式の場合も同様にSlack通知を無効にしてログ・バッチを継続する。
+Bot tokenとchannel IDが両方空なら、メンション先の指定だけでは通知を有効にしない。
 
 通知対象はHTTP 5xx、実行deadline超過、stageのfailed、送信結果不明、
 Node初期化・設定障害、token count/gate接続障害の待機、gateへの結果報告失敗、
