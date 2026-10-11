@@ -14,6 +14,7 @@ import {
   sources,
   type DbClient,
 } from "@upto/db";
+import { storedSummaryJson } from "@upto/domain/batch";
 
 import type { ExtractedContent } from "./content.js";
 
@@ -154,6 +155,15 @@ class DbPersistence implements ManagedPersistence {
   }
 
   async saveArticle(input: SaveArticleInput): Promise<string> {
+    if (this.transaction) {
+      return this.transaction((transaction) =>
+        new DbPersistence(transaction).saveArticleAtomic(input),
+      );
+    }
+    return this.saveArticleAtomic(input);
+  }
+
+  private async saveArticleAtomic(input: SaveArticleInput): Promise<string> {
     const now = new Date();
     const [article] = await this.db
       .insert(articles)
@@ -163,7 +173,7 @@ class DbPersistence implements ManagedPersistence {
         originalUrl: input.item.url,
         publishedAt: input.item.publishedAt,
         sourceId: input.sourceId,
-        summaryStatus: "summarized",
+        summaryStatus: "pending",
         title: input.summary.title || input.item.title,
         updatedAt: now,
       })
@@ -173,18 +183,29 @@ class DbPersistence implements ManagedPersistence {
           originalUrl: input.item.url,
           publishedAt: input.item.publishedAt,
           sourceId: input.sourceId,
-          summaryStatus: "summarized",
+          summaryStatus: "pending",
           title: input.summary.title || input.item.title,
           updatedAt: now,
         },
         target: articles.normalizedUrl,
+        setWhere: sql`${articles.summaryStatus} <> 'summarized'`,
       })
       .returning({
         id: articles.id,
       });
 
     if (!article) {
-      throw new Error(`Failed to save article ${input.item.url}.`);
+      const existing = await this.findArticleByNormalizedUrl(input.normalizedUrl);
+      if (!existing || existing.summaryStatus !== "summarized") {
+        throw new Error("ARTICLE_SAVE_CONFLICT");
+      }
+      await this.updateArticleMetrics({
+        articleId: existing.id,
+        bookmarks: input.item.bookmarks,
+        views: input.item.views,
+        score: input.score,
+      });
+      return existing.id;
     }
 
     await this.db
@@ -246,6 +267,10 @@ class DbPersistence implements ManagedPersistence {
         target: articleMetrics.articleId,
       });
 
+    await this.db
+      .update(articles)
+      .set({ summaryStatus: "summarized", updatedAt: now })
+      .where(eq(articles.id, article.id));
     return article.id;
   }
 
@@ -294,6 +319,7 @@ class DbPersistence implements ManagedPersistence {
           updatedAt: now,
         },
         target: articles.normalizedUrl,
+        setWhere: sql`${articles.summaryStatus} <> 'summarized'`,
       });
   }
 
@@ -366,14 +392,5 @@ class DebugTransactionRollback extends Error {
 }
 
 export function serializeSummary(summary: ArticleSummary): Record<string, unknown> {
-  return {
-    difficulty: summary.difficulty,
-    importance_score: summary.importanceScore,
-    key_points: summary.keyPoints,
-    one_line_summary: summary.oneLineSummary,
-    summary: summary.summary,
-    tags: summary.tags,
-    title: summary.title,
-    why_it_matters: summary.whyItMatters,
-  };
+  return storedSummaryJson(summary);
 }
