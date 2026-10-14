@@ -11,10 +11,11 @@
 | 構成要素 | 2026-10-11時点の状態 |
 | --- | --- |
 | Vercel Web / Supabase PostgreSQL / Cloudflare DNS | 既存構成を維持 |
-| Vercel向けcollector API・各stage・認証 | ローカル実装済み。VercelへのdeployとCloudflareとの接続は未完了 |
+| Vercel向けcollector API・各stage・認証 | ローカル実装済み。受付停止でのActions deploy経路は実装済み。実deployの受入とCloudflareとの接続は未完了 |
 | PostgreSQLのcollector用テーブル・保存処理 | schema / migration / repositoryを実装済み。本番への追加migration適用は未実施 |
 | Cloudflare Cron / Workflows / Queues / D1 / Durable Objects | 移行先の設計。runtimeは未実装 |
-| 新collector用Terraform / CI、旧Trigger停止・新Cron有効化 | 未実施 |
+| 新collector用Terraform / CI | 両環境の停止基盤、bootstrap bundle、暗号化保存Plan/承認後Apply経路を実装。実資源・接続は未検証 |
+| 旧Trigger停止・新Cron有効化 | 未実施。現bootstrap CIはconsumer/Cron有効化を拒否 |
 
 詳細な検証状況は[collector運用手順](cloudflare-vercel-collector-runbook.md)、受入条件は[ローカル品質計画](cloudflare-vercel-local-quality-plan.md)を参照する。
 
@@ -201,3 +202,10 @@ Terraform stateは既存の外部管理Cloudflare R2 bucketに保存する。R2�
 - [collector運用手順: 実装・検証状況](cloudflare-vercel-collector-runbook.md)
 - [Terraform / Vercel / Cloudflare運用手順](terraform-vercel-cloudflare-runbook.md)
 - [Supabase接続デプロイ手順](supabase-deployment-runbook.md)
+
+
+## collector Terraform実装との対応
+
+`infra/environments/collector-{staging,production}` は既存Webと別stateを使い、Vercel project/domain/DNSとCloudflare制御資源を管理する。Worker/Workflow登録はfoundation → worker → workflows → readyの別Applyで段階化した。binding/class名は [Terraform運用手順](terraform-vercel-cloudflare-runbook.md#collector-terraform運用) に記載する。
+
+現時点の配置コードは `infra/bootstrap/control.mjs` の停止bundleであり、上図の収集・outbox・reconciler・Gemini Gate業務処理を実装したものではない。実Plan/Applyとsecret保持PoCはActionsで別途確認し、本runtimeとmigration/deployment連携の完成後に起動する。Terraformコードの実装によりADR-0008をAcceptedへ変更しない。

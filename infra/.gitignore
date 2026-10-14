@@ -7,3 +7,11 @@
 backend.hcl
 
 # Keep dependency selections reproducible; do not ignore .terraform.lock.hcl.
+
+# Saved plans, private CI bundles, and provider schema snapshots.
+*.tfplan
+*.tfplan.*
+*.tfplan.json
+release.enc
+
+__pycache__/

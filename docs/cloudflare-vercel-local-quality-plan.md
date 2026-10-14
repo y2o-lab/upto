@@ -74,7 +74,7 @@ GitHub Actionsのcredentialなしverify jobで同じ `verify:local` を実行す
 PlanとApplyはGitHub Actionsを通常経路にする。bootstrapの各phase、Workerコード変更、Cron有効/無効、rollbackも同じ経路で行う。
 
 1. PR: credentialなしtests/build/validate。forkにはsecretを渡さない。レビュー対象の同一repository PRで必要ならEnvironment承認後に参考Planのみ実行し、PRコードを `pull_request_target` でsecret付き実行しない。
-2. `release-infra`確定commit: tests合格後、対象実装commitのbundleを固定しhash・API/config version・root/state keyをmanifestへ記録。認証済みinit後に `terraform plan -out=tfplan`。PR Planは再利用しない。
+2. stagingは `staging` 向け同一repository PRの参考Plan後、マージcommitから別runで保存Planを生成する。productionは `release-infra` の手動経路を使う。tests合格後、対象実装commitのbundleを固定しhash・API/config version・root/state keyをmanifestへ記録。認証済みinit後に `terraform plan -out=tfplan`。PR Planは再利用しない。
 3. 差分レビュー: create/update/delete、永続資源replacement、既存Web/DNSへの波及、secret保持、Cronの状態を確認。Plan完了後にApply jobのEnvironment Required reviewersで承認する。Plan前の承認だけで代用しない。
 4. Apply: 同じrunの保存Plan・lockfile・bundle・manifestを取得し、commit/hash/環境の一致を検査。 `terraform apply tfplan` で適用し、再planや `apply -auto-approve` へのfallbackは設けない。
 5. stale Plan・欠損artifact・不一致は停止し、再Planと再承認。state keyごとのActions concurrency（cancelしない）とR2 lockで排他。PG migrationは既存Web releaseとの共通排他を維持する。

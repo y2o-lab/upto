@@ -1,0 +1,177 @@
+name: Collector Terraform
+
+on:
+  pull_request:
+    branches: [staging]
+    types: [opened, synchronize, reopened, ready_for_review, closed]
+    paths:
+      - "infra/**"
+      - ".github/workflows/terraform-collector.yml"
+      - "apps/collector/**"
+      - "packages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Production only on release-infra; staging is driven by PR/merge"
+        type: choice
+        default: plan
+        options: [plan, apply]
+
+permissions:
+  contents: read
+
+# PR preview runs have separate locks so they cannot block a merged release.
+# Merged staging and production runs hold the state lock through approval/Apply.
+concurrency:
+  group: terraform-collector-${{ github.event_name == 'pull_request' && (github.event.pull_request.merged == true && 'staging' || format('staging-pr-{0}', github.event.number)) || 'production' }}
+  cancel-in-progress: false
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  COLLECTOR_ENVIRONMENT: ${{ github.event_name == 'pull_request' && 'staging' || 'production' }}
+  COLLECTOR_COMMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.sha }}
+
+jobs:
+  validate:
+    if: github.event_name != 'pull_request' || github.event.action != 'closed' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.COLLECTOR_COMMIT }}
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.11.4"
+          terraform_wrapper: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.8.1
+      - name: Install frozen workspace
+        run: pnpm install --frozen-lockfile
+      - name: Verify collector Functions before release
+        run: |
+          pnpm --filter @upto/collector test
+          pnpm --filter @upto/collector typecheck
+          pnpm --filter @upto/collector typecheck:vercel
+          pnpm build:collector:node
+      - name: Offline state and API validation
+        run: sh infra/scripts/test-collector.sh
+      - name: Check bootstrap module syntax
+        run: node --check infra/bootstrap/control.mjs
+
+  plan:
+    needs: validate
+    if: >-
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.base.ref == 'staging' &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       (github.event.action != 'closed' || github.event.pull_request.merged == true) &&
+       github.event.pull_request.draft == false) ||
+      (github.ref == 'refs/heads/release-infra' &&
+       github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    environment: terraform-collector-${{ github.event_name == 'pull_request' && 'staging' || 'production' }}
+    outputs:
+      ciphertext_sha256: ${{ steps.plan.outputs.ciphertext_sha256 }}
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.TF_R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_R2_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      VERCEL_API_TOKEN: ${{ secrets.VERCEL_API_TOKEN }}
+      TF_PLAN_ENCRYPTION_CERT: ${{ secrets.TF_PLAN_ENCRYPTION_CERT }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.COLLECTOR_COMMIT }}
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.11.4"
+          terraform_wrapper: false
+      - name: Build stopped bundle, save and encrypt Plan
+        id: plan
+        run: python3 infra/scripts/collector_release.py plan "$COLLECTOR_ENVIRONMENT"
+      - name: Upload encrypted release only
+        uses: actions/upload-artifact@v4
+        with:
+          name: collector-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .collector-release/release.enc
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+      - name: Remove private material
+        if: always()
+        run: rm -rf -- .collector-release
+
+  apply:
+    needs: [validate, plan]
+    if: >-
+      (github.event_name == 'pull_request' && github.event.action == 'closed' &&
+       github.event.pull_request.merged == true &&
+       github.event.pull_request.base.ref == 'staging' &&
+       github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'workflow_dispatch' &&
+       github.ref == 'refs/heads/release-infra' && inputs.operation == 'apply')
+    runs-on: ubuntu-latest
+    # Shared environment with Plan; Apply is still guarded by the merge event
+    # (or production dispatch) and only consumes this run's saved Plan.
+    environment: terraform-collector-${{ github.event_name == 'pull_request' && 'staging' || 'production' }}
+    outputs:
+      collector_project_id: ${{ steps.apply.outputs.collector_project_id }}
+      collector_origin: ${{ steps.apply.outputs.collector_origin }}
+      gate_origin: ${{ steps.apply.outputs.gate_origin }}
+      bootstrap_phase: ${{ steps.apply.outputs.bootstrap_phase }}
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.TF_R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_R2_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      VERCEL_API_TOKEN: ${{ secrets.VERCEL_API_TOKEN }}
+      TF_PLAN_DECRYPTION_KEY: ${{ secrets.TF_PLAN_DECRYPTION_KEY }}
+      EXPECTED_CIPHERTEXT_SHA256: ${{ needs.plan.outputs.ciphertext_sha256 }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.COLLECTOR_COMMIT }}
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.11.4"
+          terraform_wrapper: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: collector-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .collector-release
+      - name: Verify release and Apply the saved Plan
+        id: apply
+        run: python3 infra/scripts/collector_release.py apply "$COLLECTOR_ENVIRONMENT"
+      - name: Optional staging secret retention PoC
+        if: steps.apply.outputs.probe_action != 'none'
+        env:
+          COLLECTOR_BOOTSTRAP_PROBE_KEY: ${{ secrets.COLLECTOR_BOOTSTRAP_PROBE_KEY }}
+          PROBE_ACTION: ${{ steps.apply.outputs.probe_action }}
+        run: python3 infra/scripts/collector_probe.py "$PROBE_ACTION"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.8.1
+      - name: Deploy stopped collector Functions from the applied commit
+        id: deploy
+        env:
+          GEMINI_MODEL_PRIMARY: ${{ vars.GEMINI_MODEL_PRIMARY }}
+          GEMINI_MODEL_FALLBACK: ${{ vars.GEMINI_MODEL_FALLBACK }}
+          COLLECTOR_CHUNK_CHARS: ${{ vars.COLLECTOR_CHUNK_CHARS }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python3 infra/scripts/collector_deploy.py "$COLLECTOR_ENVIRONMENT"
+      - name: Remove private material
+        if: always()
+        run: rm -rf -- .collector-release

@@ -79,3 +79,6 @@ next-env.d.ts
 *.pid
 *.seed
 *.pid.lock
+
+# Collector encrypted-plan staging area (contains private plan material).
+.collector-release/

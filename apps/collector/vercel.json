@@ -3,6 +3,15 @@
   "framework": null,
   "buildCommand": "pnpm build:node",
   "installCommand": "pnpm install --frozen-lockfile",
-  "functions": { "api/v1/*.ts": { "maxDuration": 300 } },
-  "env": { "NODEJS_HELPERS": "0" }
+  "functions": {
+    "api/v1/*.ts": {
+      "maxDuration": 300
+    }
+  },
+  "env": {
+    "NODEJS_HELPERS": "0"
+  },
+  "git": {
+    "deploymentEnabled": false
+  }
 }

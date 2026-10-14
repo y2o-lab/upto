@@ -67,7 +67,8 @@ pnpm test
 
 通常の `pnpm test` とPG integrationは独立している。通常testの合格だけではPG検証済みとしない。
 PG integrationは型検査も必須にしている。単体test用schemaを実DBの代替にしない。
-`test:local`、`test:infra`、`verify:local` はCF/HTTP/Web/IaCの実装後に追加する。
+`test:infra` はTerraformと停止bootstrap/CI契約の検証として実装した。
+`test:local`、`verify:local` はCF/HTTP/Webの全体試験実装後に追加する。
 未対応の層をskipして完全な検証として扱わない。
 
 ## 受入ケースと実装の対応
@@ -88,7 +89,7 @@ PG integrationは型検査も必須にしている。単体test用schemaを実DB
 | capacity DO / Gemini gate DO | 未実装 | 実SQLite DO、同時取得、再起動、quota/日次境界 |
 | reconciler / cleanup / 運用制御 | 未実装 | 照合、保持、pause/drain、切替・切り戻し |
 | logs / errors | `apps/collector/src/http/handler.test.ts`（HTTP error/logの秘密非露出、不正応答拒否、config不足） | CF経路、実サービスでの秘密非露出確認 |
-| Terraform / Actions | 未実装 | offline検証、保存Plan、承認・commit/hash/state排他 |
+| Terraform / Actions | collector両root / module、停止bundle、mock test、暗号化保存PlanとApply経路を実装。`pnpm test:infra` | Actions Environment設定、staging実Plan/Apply、secret保持/再upload/URL、runtime deployment/migration連携 |
 | 全体シナリオ / Web互換 | 未実装 | 品質計画の9シナリオ、実APIから保存記事表示 |
 
 schemaや純粋testは実runtimeの証拠を代替しない。stagingでのtoken更新、承認済み
@@ -144,7 +145,7 @@ CF Workflowからのprepare接続、非terminal参照を守るcleanupは
 Vercelの[Node runtime資料](https://vercel.com/docs/functions/runtimes/node-js)で確認した
 `api/v1` の `fetch` export形式へ接続済み。local Node adapterと同じhandlerを使う。
 Vercel APIファイル・runtime config・全stage service・credentialなしbuildは実装済みで、
-Vercel platform build/deployとCF controlからの接続は未完了。
+Vercel platform build/deployはActions経路を実装済みで、実サービスでの受入とCF controlからの接続は未完了。
 
 署名対象のraw bodyを16KiBまで読んでから認証し、JSON化は認証後に行う。
 POSTのstage/path一致、環境・executor version・許可config version、strict Zod契約を検査する。
@@ -489,3 +490,16 @@ job確定時の部分失敗・cancelled。成功、通常のquota/429待機、ru
 これは移行先Node処理の第一報であり、未実装のCF Workflow/Queue/DLQ/reconcilerや
 process強制終了・Function自体が起動しない障害は対象外。現行Trigger.devの通知経路は変更しない。
 CF制御側の実装時には同じ識別子でDLQ・retry枯渇・stalled job検知を接続する。
+
+
+## collector Terraformの停止bootstrap
+
+```sh
+pnpm test:infra
+```
+
+staging/production root、VercelとCloudflare module、provider schema、暗号化保存Plan、bootstrap/CI契約を検証する。実API/remote stateには接続せず、provider初回downloadだけネットワークが必要。Node上のbootstrap handler試験は実workerdの受入ではない。
+
+実Plan/Applyはユーザーが `.github/workflows/terraform-collector.yml` で実施する。[Terraform運用手順](terraform-vercel-cloudflare-runbook.md#collector-terraform運用)にEnvironment、非secret設定、四段階bootstrap、staging secret保持PoC、backup/後続runtime連携を記載した。
+
+現在は停止classを配置するところまでで、D1のtable repositoryや本Cloudflare runtimeは未実装。consumer/Cronの有効化はCIで拒否する。Terraform outputのproject ID、collector origin、Gate origin、D1/Queue/Workflow識別子は後続deployment工程の入力となる。現在のworkflowはApply/probe成功後、同じcommitのVercel FunctionsをActionsからdeployする（Node受付停止）。追跡済みsourceのみをuploadし、復号Planを含めない。PG/D1 migration、本runtimeのsecret注入は実行しない。stagingの設定・停止応答確認は[検証手順書](collector-terraform-staging-verification.md)を参照する。
