@@ -39,6 +39,9 @@ importers:
       oxlint:
         specifier: 1.83.0
         version: 1.83.0
+      storymesh:
+        specifier: 0.1.0
+        version: 0.1.0
       tsx:
         specifier: 4.23.15
         version: 4.23.15
@@ -3827,6 +3830,36 @@ packages:
       vite-plus:
         optional: true
 
+  storymesh-darwin-arm64@0.1.0:
+    resolution: {integrity: sha512-N6g7EW02G3GpReOFAHkebJV8JIfCj4I2d+N9zhxlPjIRK6gd6K574bKPgHiA4oOoqQ8DyLuqw/1aJBPJEFo6Gg==}
+    cpu: [arm64]
+    os: [darwin]
+
+  storymesh-darwin-x64@0.1.0:
+    resolution: {integrity: sha512-JWoLqXxY4A2pJ12ZpMXaNlq+uTtfmvgdtLR0Ft+VSSz/wL0GQ4BjybuoXgOkrjI2YSU4IWT01T6oy4uaShVWnw==}
+    cpu: [x64]
+    os: [darwin]
+
+  storymesh-linux-arm64@0.1.0:
+    resolution: {integrity: sha512-866GIGMBL7nprogy0ulmVIIJVQ//80GaWp6gJMToxnrYajI6UJjmNNT5VvalT7Gq8iOkYjiN/cG9cPodUp/XFA==}
+    cpu: [arm64]
+    os: [linux]
+
+  storymesh-linux-x64@0.1.0:
+    resolution: {integrity: sha512-VvcaakYN1SAs9hy24XikZucnGB1wrnJUgK24xeZMYswGBDnbldHjYrkHy6bc2trPDVjcc4ZGK3Bgqr3tY5U5jA==}
+    cpu: [x64]
+    os: [linux]
+
+  storymesh-windows-x64@0.1.0:
+    resolution: {integrity: sha512-NsV6esoGkuCgaHWpG50aoRixwkbcW8m8Ut166tb98cGIZVrfCwGpTZKRPtwD63164/eWzdbbAD9zRjyrRZtzaQ==}
+    cpu: [x64]
+    os: [win32]
+
+  storymesh@0.1.0:
+    resolution: {integrity: sha512-KbscaTEqq75knGh0yZqvZfg/OzJKkH+rkpQTpCI77zz2eY62aFZC6kblhoxI1it+WD4pf2YMk2L3w9ZTt5Qg+w==}
+    engines: {node: '>=18'}
+    hasBin: true
+
   string-width@4.2.3:
     resolution: {integrity: sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g==}
     engines: {node: '>=8'}
@@ -7535,6 +7568,29 @@ snapshots:
       - bufferutil
       - react
       - utf-8-validate
+
+  storymesh-darwin-arm64@0.1.0:
+    optional: true
+
+  storymesh-darwin-x64@0.1.0:
+    optional: true
+
+  storymesh-linux-arm64@0.1.0:
+    optional: true
+
+  storymesh-linux-x64@0.1.0:
+    optional: true
+
+  storymesh-windows-x64@0.1.0:
+    optional: true
+
+  storymesh@0.1.0:
+    optionalDependencies:
+      storymesh-darwin-arm64: 0.1.0
+      storymesh-darwin-x64: 0.1.0
+      storymesh-linux-arm64: 0.1.0
+      storymesh-linux-x64: 0.1.0
+      storymesh-windows-x64: 0.1.0
 
   string-width@4.2.3:
     dependencies:

@@ -1,0 +1,19 @@
+# レビュー案: /bookmarks のページに必要な主要状態。
+version: 1
+component:
+  id: pages-bookmarks
+  name: Bookmarks
+  title: Pages/Bookmarks
+stories:
+  # 保存した記事のフィード。通常フィードと同じ読み心地と元記事への導線を保つ。
+  - id: default
+    required: true
+  # 「保存した記事はありません」と保存方法の案内を表示する。
+  - id: empty
+    required: true
+  # IndexedDBの復元中または保存記事の初回取得中に読み込み状態を表示する。
+  - id: loading
+    required: true
+  # 保存記事の取得失敗を表示し、再試行できる。
+  - id: error
+    required: true

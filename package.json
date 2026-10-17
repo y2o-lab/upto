@@ -15,6 +15,9 @@
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
     "storybook": "pnpm --filter @upto/web storybook",
+    "storymesh:check": "pnpm storymesh:index && storymesh spec check --spec-dir .storymesh/specs --index apps/web/storybook-static/index.json",
+    "storymesh:index": "pnpm --filter @upto/web exec storybook index --disable-telemetry -c .storybook -o storybook-static/index.json",
+    "storymesh:report": "storymesh report apps/web/src --framework react",
     "test": "vitest run",
     "test:watch": "vitest",
     "trigger:deploy:dry-run": "pnpm --dir apps/collector run trigger:deploy:dry-run",
@@ -32,6 +35,7 @@
     "jsdom": "30.1.0",
     "oxfmt": "0.68.0",
     "oxlint": "1.83.0",
+    "storymesh": "0.1.0",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
     "vitest": "5.0.1"
