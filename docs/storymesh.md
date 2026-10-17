@@ -32,7 +32,9 @@ pnpm storymesh:check
 
 `storymesh:check` は毎回 `apps/web/storybook-static/index.json` を更新する。indexは生成物としてGit管理しない。終了コードは0が必須story登録済み、1が必須story不足、2が入力や実行のエラー。未宣言storyは警告になる。
 
-承認済みの必須状態は `required: true` として宣言している。storyを追加・変更したらこのチェックを実行し、不足を解消する。既存の `pnpm verify` やCIにはまだこのチェックを組み込んでいない。
+承認済みの必須状態は `required: true` として宣言している。storyを追加・変更したらこのチェックを実行し、不足を解消する。
+
+CIは `.github/workflows/storybook.yml` で、Storybookビルド直後に生成されたindexに対して `spec check` を実行する。必須storyの不足や入力エラーがあればジョブを失敗させ、mainでのPages公開も停止する。PR・mainへのpushともに `.storymesh/specs/**` のみの変更でも起動する。`pnpm verify` には組み込まず、Storybookジョブで検査する。
 
 ## レビュー・実装時の注意
 
