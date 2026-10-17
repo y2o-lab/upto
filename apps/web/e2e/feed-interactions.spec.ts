@@ -66,9 +66,20 @@ test("cancels the previous article's dwell timer and starts a fresh timer after 
   await page.keyboard.press("ArrowDown");
   await page.clock.runFor(500);
   await expect(page.locator("article[data-index='1'] h2")).toBeInViewport();
+  // Native smooth scrolling is not driven by the mocked JavaScript clock.
+  // Wait for the snap to finish before advancing the destination's dwell timer.
+  await expect
+    .poll(() =>
+      page.getByTestId("article-feed").evaluate((feed) => {
+        const target = feed.querySelector<HTMLElement>("article[data-index='1']")!;
+        return Math.abs(feed.scrollTop - (target.offsetTop - (feed as HTMLElement).offsetTop));
+      }),
+    )
+    .toBeLessThan(1);
+  await page.clock.runFor(50);
   expect(await readArticleIds(page)).not.toContain(firstArticleId);
   expect(await readArticleIds(page)).not.toContain(secondArticleId);
-  await page.clock.runFor(600);
+  await page.clock.runFor(1_000);
   await expect.poll(() => readArticleIds(page)).toContain(secondArticleId);
   expect(await readArticleIds(page)).not.toContain(firstArticleId);
 });
