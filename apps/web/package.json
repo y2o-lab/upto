@@ -9,7 +9,7 @@
     "dev": "next dev",
     "start": "next start",
     "storybook": "storybook dev -p 6006 -c .storybook",
-    "test": "pnpm --workspace-root exec vitest run apps/web/src/app/api/articles/route.test.ts apps/web/src/lib/article-feed-order.test.ts apps/web/src/lib/articles.test.ts apps/web/src/lib/user-state-db.test.ts",
+    "test": "pnpm --workspace-root exec vitest run apps/web/src",
     "typecheck": "tsc -b --noEmit tsconfig.json",
     "test:storybook": "vitest run --config vitest.storybook.config.ts"
   },
