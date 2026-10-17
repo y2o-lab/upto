@@ -9,8 +9,9 @@
     "dev": "next dev",
     "start": "next start",
     "storybook": "storybook dev -p 6006 -c .storybook",
-    "test": "cd ../.. && vitest run apps/web/src/app/api/articles/route.test.ts apps/web/src/lib/article-feed-order.test.ts apps/web/src/lib/articles.test.ts apps/web/src/lib/user-state-db.test.ts",
-    "typecheck": "tsc -b --noEmit tsconfig.json"
+    "test": "pnpm --workspace-root exec vitest run apps/web/src",
+    "typecheck": "tsc -b --noEmit tsconfig.json",
+    "test:storybook": "vitest run --config vitest.storybook.config.ts"
   },
   "dependencies": {
     "@upto/db": "workspace:0.1.0",
@@ -18,19 +19,22 @@
     "@vercel/analytics": "2.0.1",
     "@vercel/speed-insights": "2.0.0",
     "dexie": "4.4.6",
-    "next": "16.3.5",
+    "next": "16.3.8",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "zod": "4.6.5"
   },
   "devDependencies": {
     "@storybook/addon-docs": "10.6.0",
-    "@storybook/react-vite": "10.6.0",
+    "@storybook/addon-vitest": "10.6.0",
+    "@storybook/nextjs-vite": "10.6.0",
     "@tailwindcss/postcss": "4.3.3",
-    "@vitejs/plugin-react": "6.1.1",
+    "@vitest/browser-playwright": "4.1.11",
+    "@vitest/ui": "4.1.11",
     "fake-indexeddb": "6.2.5",
     "storybook": "10.6.0",
     "tailwindcss": "4.3.3",
-    "vite": "8.3.0"
+    "vite": "8.3.0",
+    "vitest": "4.1.11"
   }
 }

@@ -1,16 +1,9 @@
-import react from "@vitejs/plugin-react";
+import type { StorybookConfig } from "@storybook/nextjs-vite";
 
-const config = {
-  framework: {
-    name: "@storybook/react-vite",
-    options: {},
-  },
-  addons: ["@storybook/addon-docs"],
-  stories: ["../src/**/*.mdx", "../src/**/*.stories.@(js|jsx|mjs|ts|tsx)"],
-  viteFinal: async (viteConfig: { plugins?: unknown[] }) => ({
-    ...viteConfig,
-    plugins: [...(viteConfig.plugins ?? []), react()],
-  }),
+const config: StorybookConfig = {
+  framework: { name: "@storybook/nextjs-vite", options: {} },
+  addons: ["@storybook/addon-docs", "@storybook/addon-vitest"],
+  stories: ["../src/**/*.stories.@(js|jsx|mjs|ts|tsx)"],
 };
 
 export default config;

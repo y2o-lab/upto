@@ -1,0 +1,27 @@
+# Allow only VRT inputs into the build context; local secrets and generated outputs stay on the host.
+**
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!tsconfig.base.json
+!playwright.visual.config.ts
+!apps/
+!apps/web/
+!apps/web/package.json
+!apps/web/tsconfig.json
+!apps/web/next.config.mjs
+!apps/web/postcss.config.mjs
+!apps/web/src/
+!apps/web/src/**
+!apps/web/e2e/
+!apps/web/e2e/visual/
+!apps/web/e2e/visual/*.visual.spec.ts
+!packages/
+!packages/db/
+!packages/db/package.json
+!packages/db/src/
+!packages/db/src/**
+!packages/domain/
+!packages/domain/package.json
+!packages/domain/src/
+!packages/domain/src/**

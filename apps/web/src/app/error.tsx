@@ -6,10 +6,10 @@ import { logError } from "../lib/logging";
 
 export default function ErrorPage({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }) {
   useEffect(() => {
     logError("Failed to render the article feed", error);
@@ -25,7 +25,7 @@ export default function ErrorPage({
         </p>
         <button
           className="mt-7 w-fit rounded-md bg-[var(--foreground)] px-4 py-2.5 text-sm font-medium text-white"
-          onClick={reset}
+          onClick={retry}
           type="button"
         >
           再読み込み

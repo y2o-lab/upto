@@ -31,9 +31,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify
 
+  e2e:
+    name: Release Web E2E
+    uses: ./.github/workflows/web-e2e.yml
+
   migrate:
     name: Migrate production database
-    needs: verify
+    needs: [verify, e2e]
     runs-on: ubuntu-latest
     environment: production-release
     env:

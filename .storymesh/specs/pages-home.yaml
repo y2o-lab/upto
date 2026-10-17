@@ -1,0 +1,19 @@
+# レビュー案: / のページに必要な主要状態。既存storyからimport後、要件を追加。
+version: 1
+component:
+  id: pages-home
+  name: Home
+  title: Pages/Home
+stories:
+  # 記事タイトル、一行要約、要点、出典、公開時刻、タグ、元記事リンクを表示する。
+  - id: default
+    required: true
+  # 取得結果が0件でもヘッダーと「今日の新着は以上です」を表示する。
+  - id: empty
+    required: true
+  # 初回取得中の app/loading.tsx 相当のスケルトンを表示する。
+  - id: loading
+    required: true
+  # 初回取得失敗時の app/error.tsx 相当の案内と再読み込みボタンを表示する。
+  - id: error
+    required: true
