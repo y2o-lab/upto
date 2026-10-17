@@ -75,16 +75,21 @@ test("saved article loading and error", async ({ page }) => {
   const gate = new Promise<void>((resolve) => {
     releaseRequest = resolve;
   });
+  let requestStarted = false;
   await page.route("**/api/articles?ids=*", async (route) => {
+    requestStarted = true;
     await gate;
     await route.fulfill({ status: 500, json: { error: { code: "internal_error" } } });
   });
   try {
-    const request = page.waitForRequest((request) =>
-      new URL(request.url()).searchParams.has("ids"),
-    );
     await page.goto("/bookmarks");
-    await request;
+    // Hydration can need another frame before it starts the saved-article request.
+    await expect
+      .poll(async () => {
+        await page.clock.runFor(50);
+        return requestStarted;
+      })
+      .toBe(true);
     await waitVisible(page, page.getByRole("heading", { name: "保存した記事を読み込んでいます" }));
     await snapshot(page, "bookmarks-loading.png");
     releaseRequest();
@@ -95,7 +100,9 @@ test("saved article loading and error", async ({ page }) => {
     await snapshot(page, "bookmarks-error.png");
   } finally {
     releaseRequest();
-    await page.unrouteAll({ behavior: "wait" });
+    if (!page.isClosed()) {
+      await page.unrouteAll({ behavior: "wait" });
+    }
   }
 });
 
