@@ -50,9 +50,9 @@ async function openFeedWithPausedClock(page: Page) {
     .toBe("true");
 }
 
-test("marks an article read only after the three-second dwell threshold", async ({ page }) => {
+test("marks an article read only after the one-second dwell threshold", async ({ page }) => {
   await openFeedWithPausedClock(page);
-  await page.clock.runFor(2_800);
+  await page.clock.runFor(800);
   expect(await readArticleIds(page)).not.toContain(firstArticleId);
   await page.clock.runFor(250);
   await expect.poll(() => readArticleIds(page)).toContain(firstArticleId);
@@ -62,14 +62,13 @@ test("cancels the previous article's dwell timer and starts a fresh timer after 
   page,
 }) => {
   await openFeedWithPausedClock(page);
-  await page.clock.runFor(2_000);
+  await page.clock.runFor(400);
   await page.keyboard.press("ArrowDown");
   await page.clock.runFor(500);
   await expect(page.locator("article[data-index='1'] h2")).toBeInViewport();
-  await page.clock.runFor(1_500);
   expect(await readArticleIds(page)).not.toContain(firstArticleId);
   expect(await readArticleIds(page)).not.toContain(secondArticleId);
-  await page.clock.runFor(1_100);
+  await page.clock.runFor(600);
   await expect.poll(() => readArticleIds(page)).toContain(secondArticleId);
   expect(await readArticleIds(page)).not.toContain(firstArticleId);
 });
