@@ -26,6 +26,12 @@
 # ファイル単位の現状を一覧する。欠落があっても終了コード0。
 pnpm storymesh:report
 
+# 初回のみ、Storybookテスト用のChromiumをインストールする。
+pnpm exec playwright install chromium
+
+# 全storyの表示・操作をデスクトップ幅とモバイル幅で検証する。
+pnpm test:storybook
+
 # 現在のcheckoutからindexを生成し直して、必須状態の登録を照合する。
 pnpm storymesh:check
 ```
@@ -34,7 +40,7 @@ pnpm storymesh:check
 
 承認済みの必須状態は `required: true` として宣言している。storyを追加・変更したらこのチェックを実行し、不足を解消する。
 
-CIは `.github/workflows/storybook.yml` で、Storybookビルド直後に生成されたindexに対して `spec check` を実行する。必須storyの不足や入力エラーがあればジョブを失敗させ、mainでのPages公開も停止する。PR・mainへのpushともに `.storymesh/specs/**` のみの変更でも起動する。`pnpm verify` には組み込まず、Storybookジョブで検査する。
+CIは `.github/workflows/storybook.yml` で、`pnpm test:storybook` によるブラウザテスト、Storybookビルド、生成されたindexに対する `spec check` を実行する。必須storyの不足や入力エラーがあればジョブを失敗させ、mainでのPages公開も停止する。PR・mainへのpushともに `.storymesh/specs/**` のみの変更でも起動する。`pnpm verify` には組み込まず、Storybookジョブで検査する。
 
 ## レビュー・実装時の注意
 
@@ -48,3 +54,11 @@ CIは `.github/workflows/storybook.yml` で、Storybookビルド直後に生成�
 - storyの自動生成は行っていない。空の骨組みだけで要件を満たした扱いにしない。
 
 設計上の根拠は `DESIGN.md`、ADR-0003、`docs/news-summary-batch-db-design-v2.md`、`docs/indexeddb-implementation-plan.md`。技術選定や画面フローを変更する決定は含めない。
+
+## Storybookのブラウザテスト
+
+`@storybook/addon-vitest` で各storyの `play` を実行する。Next.jsのLink等は `@storybook/nextjs-vite` が提供するブラウザ用の設定を使う。16状態をChromiumの1280×800と393×851で検証する。保存・解除はIndexedDBへの反映、記事送りと先頭へ戻る操作はスクロール位置、再試行は復帰後の記事表示、長文は要点・重要性・操作のカード内への収まりを確認する。ページstoryは固定データのプレビューを検証する。
+
+Storybook 10.6のaddonが対応するVitest 4は `apps/web` のみに置き、専用configで実行する。通常の単体テストはルートのVitest 5を使用する。Storybookブラウザテストは `pnpm verify` には含めず、StorybookのCIジョブで実行する。
+
+表示幅はVitestのbrowser設定に加え、プロジェクトごとの `initialGlobals.viewport` とpreviewの `parameters.viewport.options` で指定する。Storybook addonが各storyの開始時に表示幅を既定値へ戻すため、browser設定だけではモバイル検証にならない。長文story内で `window.innerWidth` / `innerHeight` を照合する。

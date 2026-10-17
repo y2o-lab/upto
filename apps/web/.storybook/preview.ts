@@ -1,5 +1,5 @@
 import "../src/app/globals.css";
-import type { Preview } from "@storybook/react-vite";
+import type { Preview } from "@storybook/nextjs-vite";
 
 import { getUserStateDb } from "../src/lib/user-state-db";
 
@@ -15,6 +15,12 @@ const preview: Preview = {
     window.localStorage.removeItem("upto-theme");
   },
   parameters: {
+    viewport: {
+      options: {
+        desktop: { name: "Desktop", styles: { width: "1280px", height: "800px" } },
+        mobile: { name: "Mobile", styles: { width: "393px", height: "851px" } },
+      },
+    },
     controls: {
       matchers: {
         color: /(background|color)$/i,

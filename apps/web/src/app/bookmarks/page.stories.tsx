@@ -1,8 +1,12 @@
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
+
 import { useState } from "react";
+import { expect, userEvent, within } from "storybook/test";
 
 import type { FeedArticle } from "../../lib/articles";
 
 import { ArticleFeed } from "../../components/article-feed";
+import { readyFeed } from "../../test/storybook";
 
 const articles = [
   {
@@ -46,24 +50,72 @@ function BookmarksErrorPreview() {
   );
 }
 
-export default {
+const meta = {
   title: "Pages/Bookmarks",
   component: BookmarksPagePreview,
   parameters: {
     layout: "fullscreen",
   },
+} satisfies Meta<typeof BookmarksPagePreview>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Default: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = await readyFeed(canvasElement);
+    const card = within(canvas.getByTestId("article-card-0"));
+    await expect(card.getByRole("heading", { name: articles[0]!.title })).toBeVisible();
+    await expect(card.getByText(articles[0]!.oneLineSummary!)).toBeVisible();
+    for (const bullet of articles[0]!.summaryBullets) {
+      await expect(card.getByText(bullet)).toBeVisible();
+    }
+    const link = card.getByRole("link", { name: "元記事を読む" });
+    await expect(link).toHaveAttribute("href", articles[0]!.originalUrl);
+    await expect(link).toHaveAttribute("target", "_blank");
+    await expect(link).toHaveAttribute("rel", "noreferrer");
+  },
 };
 
-export const Default = {};
-
-export const Empty = {
+export const Empty: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      await canvas.findByRole("heading", { name: "保存した記事はありません" }),
+    ).toBeVisible();
+    await expect(canvas.getByRole("heading", { name: "Upto" })).toBeVisible();
+    await expect(canvas.queryByTestId("article-feed")).not.toBeInTheDocument();
+    await expect(
+      canvas.getByText("記事の☆を選択すると、あとでここからまとめて読めます。"),
+    ).toBeVisible();
+  },
   render: () => <ArticleFeed articles={[]} emptyState="saved" feedType="bookmarks" />,
 };
 
-export const Loading = {
+export const Loading: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByRole("heading", { name: "保存した記事を読み込んでいます" }),
+    ).toBeVisible();
+    await expect(canvas.queryByTestId("article-feed")).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("button", { name: "再試行" })).not.toBeInTheDocument();
+  },
   render: () => <ArticleFeed articles={[]} emptyState="saved" feedType="bookmarks" isLoading />,
 };
 
-export const Error = {
+export const Error: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByRole("heading", { name: "保存した記事を読み込めませんでした" }),
+    ).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "再試行" }));
+    await readyFeed(canvasElement);
+    await expect(canvas.getByRole("heading", { name: articles[0]!.title })).toBeVisible();
+    await expect(
+      canvas.queryByRole("heading", { name: "保存した記事を読み込めませんでした" }),
+    ).not.toBeInTheDocument();
+  },
   render: () => <BookmarksErrorPreview />,
 };
