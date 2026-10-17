@@ -1,5 +1,8 @@
+import { expect, waitFor, within } from "storybook/test";
+
 import type { FeedArticle } from "../lib/articles";
 
+import { markArticleRead, markArticleSaved } from "../lib/user-state-db";
 import { ArticleFeed } from "./article-feed";
 
 const articles = [
@@ -55,7 +58,7 @@ const articles = [
     whyItMatters:
       "外部APIとLLMを扱うバッチでは、部分失敗を前提にした永続化が運用安定性に直結します。",
   },
-] satisfies FeedArticle[];
+] satisfies [FeedArticle, ...FeedArticle[]];
 
 export default {
   title: "Components/ArticleFeed",
@@ -101,5 +104,49 @@ export const Complete = {
 export const Empty = {
   args: {
     articles: [],
+  },
+};
+
+export const LongContent = {
+  args: {
+    articles: [
+      {
+        ...articles[0],
+        title:
+          "日本語の長い記事タイトルでも読みやすさを保つためのニュースフィード設計と実装のポイントを詳しく解説する",
+        oneLineSummary:
+          "タイトルや要約が長い場合にも、要点・重要性・元記事への導線が読み取れる構成を確認します。",
+        summary:
+          "大量のニュースを短時間で読むためには、長い文章を含む記事でも情報の優先順位が崩れず、狭い画面に要点と操作が収まる必要があります。".repeat(
+            3,
+          ),
+        summaryBullets: [
+          "長い日本語タイトルは折り返しを制御し、記事の要点を読むための領域を確保する。",
+          "モバイルとデスクトップの双方で、要点と重要性を確認してから元記事を開ける。",
+          "タグが長くても保存ボタンや元記事リンクに重ならないことを確認する。",
+        ],
+        whyItMatters:
+          "情報量の多い記事でも要点と操作を見失わず、移動中の短い時間でニュースを読めます。",
+        tags: ["日本語ニュースフィードの設計", "レスポンシブデザイン", "アクセシビリティ"],
+      },
+    ],
+  },
+};
+
+export const Saved = {
+  beforeEach: async () => {
+    await markArticleSaved(articles[0].id, true);
+  },
+};
+
+export const Read = {
+  play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() =>
+      expect(canvas.getByTestId("article-feed")).toHaveAttribute("data-ready", "true"),
+    );
+    // Mark after the home feed freezes its initial exclusion set, as in a browsing session.
+    await markArticleRead(articles[0].id);
+    await waitFor(() => expect(canvas.getAllByTitle("既読").length).toBeGreaterThan(0));
   },
 };

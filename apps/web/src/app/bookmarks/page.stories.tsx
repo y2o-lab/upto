@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import type { FeedArticle } from "../../lib/articles";
 
 import { ArticleFeed } from "../../components/article-feed";
@@ -29,6 +31,21 @@ function BookmarksPagePreview() {
   return <ArticleFeed articles={articles} feedType="bookmarks" />;
 }
 
+function BookmarksErrorPreview() {
+  const [hasError, setHasError] = useState(true);
+  return hasError ? (
+    <ArticleFeed
+      articles={[]}
+      emptyState="saved"
+      feedType="bookmarks"
+      loadError="保存した記事の取得に失敗しました"
+      onRetry={() => setHasError(false)}
+    />
+  ) : (
+    <BookmarksPagePreview />
+  );
+}
+
 export default {
   title: "Pages/Bookmarks",
   component: BookmarksPagePreview,
@@ -41,4 +58,12 @@ export const Default = {};
 
 export const Empty = {
   render: () => <ArticleFeed articles={[]} emptyState="saved" feedType="bookmarks" />,
+};
+
+export const Loading = {
+  render: () => <ArticleFeed articles={[]} emptyState="saved" feedType="bookmarks" isLoading />,
+};
+
+export const Error = {
+  render: () => <BookmarksErrorPreview />,
 };

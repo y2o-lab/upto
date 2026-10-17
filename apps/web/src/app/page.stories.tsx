@@ -1,6 +1,10 @@
+import { useState } from "react";
+
 import type { FeedArticle } from "../lib/articles";
 
 import { ArticleFeed } from "../components/article-feed";
+import ErrorPage from "./error";
+import LoadingPage from "./loading";
 
 const articles = [
   {
@@ -38,6 +42,18 @@ function HomePagePreview() {
   );
 }
 
+function HomeErrorPreview() {
+  const [hasError, setHasError] = useState(true);
+  return hasError ? (
+    <ErrorPage
+      error={new globalThis.Error("Storybook: initial article load failed")}
+      reset={() => setHasError(false)}
+    />
+  ) : (
+    <HomePagePreview />
+  );
+}
+
 export default {
   title: "Pages/Home",
   component: HomePagePreview,
@@ -47,3 +63,19 @@ export default {
 };
 
 export const Default = {};
+
+export const Empty = {
+  render: () => (
+    <main>
+      <ArticleFeed articles={[]} />
+    </main>
+  ),
+};
+
+export const Loading = {
+  render: () => <LoadingPage />,
+};
+
+export const Error = {
+  render: () => <HomeErrorPreview />,
+};
