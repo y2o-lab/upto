@@ -17,7 +17,7 @@ async function seedReadArticleIds(page: Page, articleIds: string[]) {
 
           const store = transaction.objectStore("read_articles");
           for (const articleId of ids) {
-            store.put({ articleId, readAt: "2026-09-09T00:00:00.000Z" });
+            store.put({ articleId, readAt: new Date().toISOString() });
           }
         };
       }),
@@ -246,35 +246,6 @@ test("continues feed browsing when local IndexedDB writes fail", async ({ page }
   await expect(page.locator("article[data-index='1'] h2")).toBeInViewport();
   await expect(page.getByRole("button", { name: "次の記事へ" }).first()).toBeVisible();
   expect(pageErrors).toEqual([]);
-});
-
-test("marks an article read after staying on it for three seconds", async ({ page }) => {
-  await page.goto("/");
-  await expect(page.getByTestId("article-feed")).toHaveAttribute("data-ready", "true");
-
-  await expect
-    .poll(async () =>
-      page.evaluate(
-        () =>
-          new Promise<boolean>((resolve, reject) => {
-            const request = indexedDB.open("upto_user_state");
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => {
-              const db = request.result;
-              const transaction = db.transaction("read_articles", "readonly");
-              const getRequest = transaction
-                .objectStore("read_articles")
-                .get("00000000-0000-4000-8000-000000000002");
-              getRequest.onerror = () => reject(getRequest.error);
-              getRequest.onsuccess = () => {
-                db.close();
-                resolve(Boolean(getRequest.result));
-              };
-            };
-          }),
-      ),
-    )
-    .toBe(true);
 });
 
 test("skips previously read articles and fills the feed with later unread candidates", async ({

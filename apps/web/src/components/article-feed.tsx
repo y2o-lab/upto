@@ -95,6 +95,9 @@ export function ArticleFeed({
   const isFeedOrderReady = feedType !== "home" || readArticleIdsForExclusion !== null;
   const activeArticle =
     activeIndex < orderedFeedArticles.length ? orderedFeedArticles[activeIndex] : null;
+  const isActiveArticleRead = activeArticle
+    ? userState.readArticleIds.has(activeArticle.id)
+    : false;
   const hasTerminalCard = !hasMoreArticles;
 
   useEffect(() => {
@@ -254,7 +257,7 @@ export function ArticleFeed({
       return;
     }
 
-    if (userState.readArticleIds.has(activeArticle.id)) {
+    if (isActiveArticleRead) {
       return;
     }
 
@@ -263,10 +266,10 @@ export function ArticleFeed({
       void markArticleRead(activeArticle.id).catch((error: unknown) =>
         logWarning("Failed to mark article read", error),
       );
-    }, 3_000);
+    }, 1_000);
 
     return () => window.clearTimeout(timeoutId);
-  }, [activeArticle, hasRestoredProgress, userState.readArticleIds]);
+  }, [activeArticle, hasRestoredProgress, isActiveArticleRead]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {

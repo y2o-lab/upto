@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - ".github/workflows/storybook.yml"
+      - ".storymesh/specs/**"
       - "apps/web/**"
       - "package.json"
       - "pnpm-lock.yaml"
@@ -13,6 +14,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/storybook.yml"
+      - ".storymesh/specs/**"
       - "apps/web/**"
       - "package.json"
       - "pnpm-lock.yaml"
@@ -48,8 +50,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Test Storybook
+        run: pnpm test:storybook
+
       - name: Build Storybook
         run: pnpm build-storybook
+
+      - name: Check required Storybook states
+        run: pnpm exec storymesh spec check --spec-dir .storymesh/specs --index apps/web/storybook-static/index.json
 
       - name: Upload Pages artifact
         if: github.event_name != 'pull_request'

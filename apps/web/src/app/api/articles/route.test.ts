@@ -138,4 +138,67 @@ describe("GET /api/articles", () => {
       expect.objectContaining({ message: "connection failed postgres://secret@example/db" }),
     );
   });
+  it.each([undefined, 1, 30])(
+    "returns feed pages and passes pagination arguments for limit %s",
+    async (limit) => {
+      const result = {
+        articles: [],
+        hasMore: false,
+        nextCursor: null,
+        snapshotAt: "2026-06-16T00:00:00.000Z",
+      };
+      getArticlesPageMock.mockResolvedValueOnce(result);
+      const params = new URLSearchParams({ cursor: "cursor", snapshotAt: result.snapshotAt });
+      if (limit !== undefined) params.set("limit", String(limit));
+      const response = await GET(new Request(`http://localhost/api/articles?${params}`));
+      expect(response.status).toBe(200);
+      expect(response.headers.get("Cache-Control")).toBe("no-store");
+      expect(await response.json()).toEqual(result);
+      expect(getArticlesPageMock).toHaveBeenCalledWith({
+        cursor: "cursor",
+        limit: limit ?? 10,
+        snapshotAt: result.snapshotAt,
+      });
+      expect(getArticlesByIdsMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["0", "-1", "1.5", "31", "NaN", ""])('rejects invalid limit "%s"', async (limit) => {
+    const response = await GET(new Request(`http://localhost/api/articles?limit=${limit}`));
+    expect(response.status).toBe(400);
+    expect(getArticlesPageMock).not.toHaveBeenCalled();
+    expect(getArticlesByIdsMock).not.toHaveBeenCalled();
+  });
+
+  it.each([0, 101])("rejects saved ID lists of length %s", async (count) => {
+    const ids = Array.from({ length: count }, () => "00000000-0000-4000-8000-000000000001");
+    const response = await GET(new Request(`http://localhost/api/articles?ids=${ids.join(",")}`));
+    expect(response.status).toBe(400);
+    expect(getArticlesByIdsMock).not.toHaveBeenCalled();
+    expect(getArticlesPageMock).not.toHaveBeenCalled();
+  });
+
+  it("accepts the maximum saved ID list size", async () => {
+    const ids = Array.from(
+      { length: 100 },
+      (_, index) => `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+    );
+    getArticlesByIdsMock.mockResolvedValueOnce([]);
+    const response = await GET(new Request(`http://localhost/api/articles?ids=${ids.join(",")}`));
+    expect(response.status).toBe(200);
+    expect(getArticlesByIdsMock).toHaveBeenCalledWith(ids);
+  });
+
+  it("returns a fixed error response when saved article loading fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    getArticlesByIdsMock.mockRejectedValueOnce(new Error("private database error"));
+    const response = await GET(
+      new Request("http://localhost/api/articles?ids=00000000-0000-4000-8000-000000000001"),
+    );
+    expect(response.status).toBe(500);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(await response.json()).toEqual({
+      error: { code: "internal_error", message: "記事の読み込みに失敗しました" },
+    });
+  });
 });

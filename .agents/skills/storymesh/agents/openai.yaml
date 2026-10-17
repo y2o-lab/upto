@@ -1,0 +1,4 @@
+interface:
+  display_name: "Storymesh"
+  short_description: "Audit Storybook story coverage with Storymesh"
+  default_prompt: "Use $storymesh to check Storybook story coverage in this project."

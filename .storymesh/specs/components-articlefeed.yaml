@@ -1,0 +1,33 @@
+# レビュー案: 既存の ArticleFeed story に加え、読みやすさと保存・既読の状態を要求。
+# 小さい内部コンポーネント全体のstory作成は要求しない。
+version: 1
+component:
+  id: components-articlefeed
+  name: ArticleFeed
+  title: Components/ArticleFeed
+stories:
+  # 複数記事を表示し、縦スワイプ・ホイール・キーボードで移動できる。
+  - id: default
+    required: true
+  # 追加取得中も既存記事を保持し、次の記事の取得中であることが分かる。
+  - id: loading-more
+    required: true
+  # 追加取得失敗時に既存記事と閲覧位置を保ち、再試行ボタンを表示する。
+  - id: load-more-error
+    required: true
+  # 全件を読み終えた状態と先頭へ戻る導線を表示する。
+  - id: complete
+    required: true
+  # 未読記事が0件の状態を表示する。初期化完了後も読み込み表示が残らない。
+  - id: empty
+    required: true
+  # 長い日本語タイトル・要約・タグでも要点や元記事リンクが画面外に消えない。
+  - id: long-content
+    required: true
+  # 保存済みの星表示を確認でき、解除操作が可能。
+  - id: saved
+    required: true
+  # 現在のセッションで既読になった記事の既読表示を確認できる。
+  # 前セッションの既読記事はホームから除外されるため、初期データだけでは再現しない。
+  - id: read
+    required: true
