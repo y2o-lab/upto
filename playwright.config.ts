@@ -2,6 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./apps/web/e2e",
+  testIgnore: "**/visual/**",
   forbidOnly: Boolean(process.env.CI),
   globalTimeout: 10 * 60 * 1_000,
   workers: process.env.CI ? 2 : "50%",

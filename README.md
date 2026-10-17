@@ -74,15 +74,24 @@ pnpm exec playwright install chromium
 pnpm test:e2e
 ```
 
+現在のUIを基準としたVRTはDockerで実行する。
+
+```bash
+pnpm test:vrt
+```
+
+対象画面、差分レビュー、意図したUI変更時の基準画像更新は[VRT運用手順](docs/visual-regression-testing.md)を参照する。
+
 ### CIでの品質ゲート
 
 PRの作成・更新時と`main`へのpush時には、`verify.yml`で次のチェックを並列実行する。
 
 - `Unit and static checks`: 整形・Lint・型チェック・単体テスト（`pnpm verify`）
 - `Web E2E / Playwright`: デスクトップ／モバイルChromiumのE2E全件（`pnpm test:e2e`）
+- `Web E2E / Visual regression`: PC／モバイル × ライト／ダークの画像比較（`pnpm test:vrt`）
 
-最後に`verify`ジョブが両方の結果を集約し、一方でも失敗・キャンセル・スキップした場合は品質ゲートを失敗させる。
-既存の`verify`チェックを必須にしている場合は、そのままE2Eもマージ条件に含まれる。
+最後に`verify`ジョブが結果を集約し、いずれかが失敗・キャンセル・スキップした場合は品質ゲートを失敗させる。
+既存の`verify`チェックを必須にしている場合は、そのままE2EとVRTもマージ条件に含まれる。
 
 E2Eは`web-e2e.yml`に共通化し、固定データとローカルサーバーで実行する。DB・Gemini・デプロイ用のSecretsは不要。
 失敗したテストはジョブを失敗させ、HTMLレポートと失敗時のスクリーンショット・トレースをActionsの`playwright-report`アーティファクトに7日間保存する。

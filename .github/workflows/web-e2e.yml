@@ -8,6 +8,27 @@ permissions:
   contents: read
 
 jobs:
+  visual:
+    name: Visual regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v6
+      - name: Compare desktop and mobile screenshots in the fixed Linux environment
+        run: sh apps/web/e2e/visual/run.sh
+      - name: Upload visual comparison report and failure evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-regression-report
+          path: |
+            playwright-report/visual/
+            test-results/visual/
+          retention-days: 7
+          if-no-files-found: ignore
+
   playwright:
     name: Playwright
     runs-on: ubuntu-latest
