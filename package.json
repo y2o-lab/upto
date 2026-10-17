@@ -19,6 +19,7 @@
     "storymesh:index": "pnpm --filter @upto/web exec storybook index --disable-telemetry -c .storybook -o storybook-static/index.json",
     "storymesh:report": "storymesh report apps/web/src --framework react",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "test:watch": "vitest",
     "trigger:deploy:dry-run": "pnpm --dir apps/collector run trigger:deploy:dry-run",
     "trigger:deploy:prod": "pnpm --dir apps/collector run trigger:deploy:prod",

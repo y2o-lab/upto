@@ -47,7 +47,7 @@ Network Restrictionsを使う場合は、VercelとTrigger.dev runner、および
 
 ## 2. migrationを適用する
 
-schema変更を含む`release`では、Web deploymentの前にGitHub Actionsの`Release web` workflowがmigrationを1回だけ実行する。migrationが失敗するとWeb deploymentは開始しない。taskやWebの起動commandへmigrationを組み込まない。
+schema変更を含む`release`では、Web deploymentの前にGitHub Actionsの`Release web` workflowがmigrationを1回だけ実行する。整形・Lint・型チェック・単体テストと、デスクトップ／モバイルのE2Eが両方成功するまでmigrationは開始しない。migrationが失敗するとWeb deploymentは開始しない。taskやWebの起動commandへmigrationを組み込まない。
 
 GitHubの **Settings → Environments → production-release → Environment secrets** に次を設定する。
 

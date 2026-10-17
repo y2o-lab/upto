@@ -71,8 +71,27 @@ For browser coverage:
 
 ```bash
 pnpm exec playwright install chromium
-pnpm exec playwright test
+pnpm test:e2e
 ```
+
+### CIでの品質ゲート
+
+PRの作成・更新時と`main`へのpush時には、`verify.yml`で次のチェックを並列実行する。
+
+- `Unit and static checks`: 整形・Lint・型チェック・単体テスト（`pnpm verify`）
+- `Web E2E / Playwright`: デスクトップ／モバイルChromiumのE2E全件（`pnpm test:e2e`）
+
+最後に`verify`ジョブが両方の結果を集約し、一方でも失敗・キャンセル・スキップした場合は品質ゲートを失敗させる。
+既存の`verify`チェックを必須にしている場合は、そのままE2Eもマージ条件に含まれる。
+
+E2Eは`web-e2e.yml`に共通化し、固定データとローカルサーバーで実行する。DB・Gemini・デプロイ用のSecretsは不要。
+失敗したテストはジョブを失敗させ、HTMLレポートと失敗時のスクリーンショット・トレースをActionsの`playwright-report`アーティファクトに7日間保存する。
+`web-e2e.yml`はActions画面から手動実行もできる。
+
+`release`へのpush時も同じE2Eを実行し、単体テストを含む`Verify release`と`Release Web E2E / Playwright`の両方が成功するまで本番マイグレーション・デプロイを開始しない。
+
+PRのマージ自体を禁止するには、GitHubのブランチ保護／Rulesetで結果を集約する`verify`を必須ステータスチェックに指定する。
+初回のActions実行後に表示されるチェック名を確認して設定する。Workflowファイルの追加だけではGitHub側の必須チェック設定は変更されない。
 
 ## Codex Harness
 

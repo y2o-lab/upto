@@ -51,7 +51,7 @@ function HomeErrorPreview() {
   return hasError ? (
     <ErrorPage
       error={new globalThis.Error("Storybook: initial article load failed")}
-      reset={() => setHasError(false)}
+      retry={() => setHasError(false)}
     />
   ) : (
     <HomePagePreview />

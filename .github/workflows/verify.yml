@@ -6,8 +6,12 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
-  verify:
+  checks:
+    name: Unit and static checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -23,3 +27,19 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify
+
+  e2e:
+    name: Web E2E
+    uses: ./.github/workflows/web-e2e.yml
+
+  verify:
+    if: ${{ always() }}
+    needs: [checks, e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require unit checks and E2E success
+        env:
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          E2E_RESULT: ${{ needs.e2e.result }}
+        run: test "$CHECKS_RESULT" = success && test "$E2E_RESULT" = success
