@@ -1,0 +1,61 @@
+name: CodeQL
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  merge_group:
+  schedule:
+    # 毎週水曜 12:23 JST。定刻直後の混雑を避け、最新のクエリでも再解析する。
+    - cron: "23 3 * * 3"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    # 手動実行と merge queue を含め、main 向けの解析に限定する。
+    if: >-
+      github.ref == 'refs/heads/main' ||
+      github.base_ref == 'main' ||
+      github.event.merge_group.base_ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # private repository での CodeQL による実行情報の取得に使用する。
+      actions: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - javascript-typescript
+          - actions
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # SHA 固定は更新時にリリースとの対応を確認し、init/analyze を同時に更新する。
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: ${{ matrix.language }}
+          # 全ワークスペースのソースを解析する。pnpm install や本番 Secrets は不要。
+          build-mode: none
+          queries: security-extended
+
+      - name: Analyze and upload results
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          category: /language:${{ matrix.language }}
