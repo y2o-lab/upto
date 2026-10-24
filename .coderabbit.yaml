@@ -1,0 +1,61 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# 設定項目: https://docs.coderabbit.ai/reference/configuration
+language: ja-JP
+tone_instructions: >-
+  レビュー、要約、会話は日本語で、平易な言葉を使って簡潔に書いてください。
+  指摘は「問題・起こる影響・具体的な修正案」の順に、原則3文以内で説明してください。
+  専門用語には必要な場合だけ短い説明を添え、コード識別子は原文を保ってください。
+  根拠のない断定、重複した指摘、長い前置き、好みだけの変更提案は避けてください。
+early_access: false
+
+reviews:
+  profile: chill
+  high_level_summary: true
+  high_level_summary_in_walkthrough: true
+  high_level_summary_instructions: >-
+    変更の目的と主な動作の変化を、日本語で最大3項目の短い箇条書きにしてください。
+    実施が確認できないテストや効果を、実施済み・達成済みとして書かないでください。
+  collapse_walkthrough: true
+  changed_files_summary: false
+  sequence_diagrams: false
+  estimate_code_review_effort: false
+  related_issues: false
+  related_prs: false
+  poem: false
+  in_progress_fortune: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    # デフォルトブランチ（main）以外は自動レビュー対象に追加しない。
+    base_branches: []
+
+  # ソース、テスト、DB migration、CI、運用ドキュメントはレビュー対象に残す。
+  # node_modules、.next、dist、lockfile などは CodeRabbit 標準の除外に任せる。
+  path_filters:
+    - "!**/coverage/**"
+    - "!**/storybook-static/**"
+    - "!**/playwright-report/**"
+    - "!**/test-results/**"
+
+  # 一律のコメント量ではなく、既存のプロジェクト方針とコードの正しさを評価する。
+  pre_merge_checks:
+    docstrings:
+      mode: "off"
+
+  tools:
+    oxc:
+      enabled: true
+    eslint:
+      enabled: false
+    biome:
+      enabled: false
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    # AGENTS.md は自動検出されるため、既存の規約をここに転記しない。
+    filePatterns:
+      - "docs/adr/*.md"
+      - files: "DESIGN.md"
+        applyTo: "apps/web/**"
