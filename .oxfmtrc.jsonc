@@ -23,6 +23,7 @@
   "sortTailwindcss": true,
   "ignorePatterns": [
     ".next/**",
+    "apps/collector/build-node/**",
     "coverage/**",
     "dist/**",
     "drizzle/**",
