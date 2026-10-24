@@ -5,6 +5,7 @@ import type { CollectorConfig } from "./config.js";
 
 import { extractArticleContent } from "./content.js";
 import { feedEndpointUrl, fetchFeedItems, type FeedItem, type FeedTarget } from "./feeds.js";
+import { atCollectorStage, describeCollectorError } from "./notifications/collector-report.js";
 import { createPersistence, type ManagedPersistence, type Persistence } from "./persistence.js";
 import { createGeminiSummarizer, type Summarizer } from "./summarizer.js";
 
@@ -166,7 +167,11 @@ async function runCollectorWithPersistence(
   let totalFailedCount = 0;
 
   for (const feed of input.feeds) {
-    const job = await input.persistence.startFeedJob(feed);
+    const job = await atCollectorStage(
+      "feed_job",
+      () => input.persistence.startFeedJob(feed),
+      feed.name,
+    );
     let feedFetchedCount = 0;
     let feedFailedCount = 0;
     let feedFetchFailed = false;
@@ -192,7 +197,9 @@ async function runCollectorWithPersistence(
       }
 
       try {
-        const items = await fetchFeedItems(feed, input.config.maxItemsPerFeed, fetcher);
+        const items = await atCollectorStage("feed_fetch", () =>
+          fetchFeedItems(feed, input.config.maxItemsPerFeed, fetcher),
+        );
         await Promise.all(
           items.map((item) =>
             articleLimit(async () => {
@@ -217,6 +224,7 @@ async function runCollectorWithPersistence(
                 await markItemFailedIfPossible(input.persistence, job.sourceId, item, error);
                 input.logger({
                   error: errorMessage,
+                  errorDetails: describeCollectorError(error),
                   feed: feed.name,
                   status: "article_failed",
                   url: item.url,
@@ -232,6 +240,7 @@ async function runCollectorWithPersistence(
         feedErrors.push(errorMessage);
         input.logger({
           error: errorMessage,
+          errorDetails: describeCollectorError(error),
           feed: feed.name,
           status: "feed_failed",
         });
@@ -242,11 +251,16 @@ async function runCollectorWithPersistence(
     if (feedFetchFailed) {
       failedFeedCount += 1;
     }
-    await input.persistence.finishFeedJob(job.jobId, {
-      errorSummary: feedErrors.length > 0 ? feedErrors.slice(0, 10).join("\n") : null,
-      failedCount: feedFailedCount,
-      fetchedCount: feedFetchedCount,
-    });
+    await atCollectorStage(
+      "feed_job",
+      () =>
+        input.persistence.finishFeedJob(job.jobId, {
+          errorSummary: feedErrors.length > 0 ? feedErrors.slice(0, 10).join("\n") : null,
+          failedCount: feedFailedCount,
+          fetchedCount: feedFetchedCount,
+        }),
+      feed.name,
+    );
     input.logger({
       failedCount: feedFailedCount,
       feed: feed.name,
@@ -280,20 +294,25 @@ type ProcessFeedItemResult = "processed" | "skipped_duplicate";
 
 async function processFeedItem(input: ProcessFeedItemInput): Promise<ProcessFeedItemResult> {
   const normalizedUrl = normalizeArticleUrl(input.item.url);
-  const existingArticle = await input.persistence.findArticleByNormalizedUrl(normalizedUrl);
+  const existingArticle = await atCollectorStage("article_lookup", () =>
+    input.persistence.findArticleByNormalizedUrl(normalizedUrl),
+  );
   const score = calculateScoreForItem(input.item);
 
   if (existingArticle?.summaryStatus === "summarized") {
     try {
-      await input.persistence.updateArticleMetrics({
-        articleId: existingArticle.id,
-        bookmarks: input.item.bookmarks,
-        score,
-        views: input.item.views,
-      });
+      await atCollectorStage("metrics_update", () =>
+        input.persistence.updateArticleMetrics({
+          articleId: existingArticle.id,
+          bookmarks: input.item.bookmarks,
+          score,
+          views: input.item.views,
+        }),
+      );
     } catch (error) {
       input.logger({
         error: error instanceof Error ? error.message : String(error),
+        errorDetails: describeCollectorError(error),
         feed: input.feed.name,
         normalizedUrl,
         status: "article_duplicate_metrics_update_failed",
@@ -309,35 +328,41 @@ async function processFeedItem(input: ProcessFeedItemInput): Promise<ProcessFeed
     return "skipped_duplicate";
   }
 
-  const content = await extractArticleContent(
-    input.item.url,
-    input.item.summaryText,
-    input.item.contentHtml,
-    input.fetcher,
+  const content = await atCollectorStage("extract", async () => {
+    const content = await extractArticleContent(
+      input.item.url,
+      input.item.summaryText,
+      input.item.contentHtml,
+      input.fetcher,
+    );
+    if (!content.contentText) {
+      throw new Error("No article content was available after extraction and fallback.");
+    }
+    return content;
+  });
+
+  const summary = await atCollectorStage("summarize", () =>
+    input.summarizer.summarize({
+      bookmarks: input.item.bookmarks,
+      contentText: content.contentText,
+      publishedAt: input.item.publishedAt,
+      sourceName: input.feed.name,
+      title: input.item.title,
+      url: input.item.url,
+      views: input.item.views,
+    }),
   );
-
-  if (!content.contentText) {
-    throw new Error("No article content was available after extraction and fallback.");
-  }
-
-  const summary = await input.summarizer.summarize({
-    bookmarks: input.item.bookmarks,
-    contentText: content.contentText,
-    publishedAt: input.item.publishedAt,
-    sourceName: input.feed.name,
-    title: input.item.title,
-    url: input.item.url,
-    views: input.item.views,
-  });
-  await input.persistence.saveArticle({
-    content,
-    item: input.item,
-    modelId: summary.modelId,
-    normalizedUrl,
-    score,
-    sourceId: input.sourceId,
-    summary: summary.summary,
-  });
+  await atCollectorStage("persist", () =>
+    input.persistence.saveArticle({
+      content,
+      item: input.item,
+      modelId: summary.modelId,
+      normalizedUrl,
+      score,
+      sourceId: input.sourceId,
+      summary: summary.summary,
+    }),
+  );
 
   return "processed";
 }

@@ -59,6 +59,6 @@ CIは `.github/workflows/storybook.yml` で、`pnpm test:storybook` によるブ
 
 `@storybook/addon-vitest` で各storyの `play` を実行する。Next.jsのLink等は `@storybook/nextjs-vite` が提供するブラウザ用の設定を使う。16状態をChromiumの1280×800と393×851で検証する。保存・解除はIndexedDBへの反映、記事送りと先頭へ戻る操作はスクロール位置、再試行は復帰後の記事表示、長文は要点・重要性・操作のカード内への収まりを確認する。ページstoryは固定データのプレビューを検証する。
 
-Storybook 10.6のaddonが対応するVitest 4は `apps/web` のみに置き、専用configで実行する。通常の単体テストはルートのVitest 5を使用する。Storybookブラウザテストは `pnpm verify` には含めず、StorybookのCIジョブで実行する。
+Storybook 10.6.3のaddonはVitest 5に対応している。`apps/web` の `vitest`、`@vitest/browser-playwright`、`@vitest/ui` はルートのVitestと同じ5.0.5に揃え、Storybookブラウザテストは専用configで実行する。通常の単体テストはルートのVitestを使用する。Storybookブラウザテストは `pnpm verify` には含めず、StorybookのCIジョブで実行する。
 
 表示幅はVitestのbrowser設定に加え、プロジェクトごとの `initialGlobals.viewport` とpreviewの `parameters.viewport.options` で指定する。Storybook addonが各storyの開始時に表示幅を既定値へ戻すため、browser設定だけではモバイル検証にならない。長文story内で `window.innerWidth` / `innerHeight` を照合する。

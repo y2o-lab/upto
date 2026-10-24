@@ -15,7 +15,7 @@ jobs:
     env:
       CI: "true"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Compare desktop and mobile screenshots in the fixed Linux environment
         run: sh apps/web/e2e/visual/run.sh
       - name: Upload visual comparison report and failure evidence
@@ -37,13 +37,13 @@ jobs:
       CI: "true"
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v6
         with:
-          version: 10.8.1
+          version: 10.34.7
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           cache: pnpm
           node-version: 24

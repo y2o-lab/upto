@@ -14,13 +14,13 @@ jobs:
     name: Unit and static checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v6
         with:
-          version: 10.8.1
+          version: 10.34.7
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           cache: pnpm
           node-version: 24

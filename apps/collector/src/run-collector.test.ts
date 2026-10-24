@@ -435,6 +435,7 @@ describe("runCollector", () => {
     expect(summarize).not.toHaveBeenCalled();
     expect(logEvents).toContainEqual({
       error: "metrics write failed",
+      errorDetails: { stage: "metrics_update", kind: "unknown" },
       feed: "Example",
       normalizedUrl: "https://example.com/articles/metrics-failure",
       status: "article_duplicate_metrics_update_failed",
@@ -615,6 +616,7 @@ describe("runCollector", () => {
 
   it("shares one summarizer across concurrent articles and preserves article-level failures", async () => {
     const failures: unknown[] = [];
+    const logger = vi.fn();
     const savedArticles: unknown[] = [];
     const rss = createRss([
       {
@@ -646,7 +648,7 @@ describe("runCollector", () => {
       }
       await summariesReleased;
       if (article.title === "Concurrent failure") {
-        throw new Error("summary failed");
+        throw Object.assign(new Error("summary failed with secret-token"), { status: 429 });
       }
       return {
         modelId: "test-model",
@@ -688,7 +690,7 @@ describe("runCollector", () => {
       },
       dependencies: {
         fetcher: async () => new Response(rss),
-        logger: () => undefined,
+        logger,
         persistence,
         summarizer: { summarize },
       },
@@ -711,6 +713,13 @@ describe("runCollector", () => {
     expect(savedArticles).toHaveLength(1);
     expect(failures).toHaveLength(1);
     expect(result).toMatchObject({ articleCount: 1, failedCount: 1, successfulFeedCount: 1 });
+    expect(logger).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "article_failed",
+        feed: "Example",
+        errorDetails: { stage: "summarize", kind: "rate_limit", httpStatus: 429 },
+      }),
+    );
   });
 
   it("reports a feed-level failure when the feed cannot be fetched", async () => {
