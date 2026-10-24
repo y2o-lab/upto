@@ -57,6 +57,7 @@ describe("Trigger.dev configuration", () => {
     expect(config.tsconfig).toBe("./trigger.tsconfig.json");
   });
 
+  // Building the real deploy bundle can exceed Vitest's default 5-second timeout in CI.
   it("writes jsdom as an external dependency in the deploy bundle", async () => {
     vi.stubEnv("TRIGGER_PROJECT_REF", "proj_test");
 
@@ -113,7 +114,7 @@ describe("Trigger.dev configuration", () => {
     } finally {
       await rm(outputDirectory, { force: true, recursive: true });
     }
-  });
+  }, 30_000);
 
   it("allows the isolated managed index worker to reload the config", async () => {
     vi.stubEnv("TRIGGER_PROJECT_REF", "");
