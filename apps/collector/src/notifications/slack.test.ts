@@ -27,6 +27,36 @@ const result = {
 };
 
 describe("collector Slack notifications", () => {
+  it.each([result, { ...result, failedCount: 1 }, undefined])(
+    "mentions the configured user for every notification outcome: %o",
+    async (outcome) => {
+      const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response("ok"));
+      await notifyCollector(
+        { context, ...(outcome ? { result: outcome } : {}), report },
+        {
+          environment: { ...environment, SLACK_MENTION_USER_ID: " U012AB3CD " },
+          fetcher,
+          logger: { warn: vi.fn() },
+        },
+      );
+      const payload = JSON.parse(String(fetcher.mock.calls[0]![1]?.body));
+      expect(payload.text).toMatch(/^<@U012AB3CD>\n/);
+    },
+  );
+
+  it.each([undefined, "", " ", "<!channel>", "U123><!channel", "U123\nU456", "S012AB3CD"])(
+    "omits missing or invalid mention IDs without suppressing the message: %s",
+    (id) => {
+      const text = buildSlackMessage(
+        { context, result, report },
+        { ...environment, SLACK_MENTION_USER_ID: id },
+      );
+      expect(text).toMatch(/^✅ ニュース収集バッチ完了\n/);
+      expect(text).not.toContain("<@");
+      expect(text).not.toContain("<!channel>");
+    },
+  );
+
   it("formats successful results with counts, duration, context and a run link", () => {
     const text = buildSlackMessage({ context, result, report }, environment);
     expect(text).toContain("✅ ニュース収集バッチ完了");

@@ -45,6 +45,11 @@ function escapeSlack(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
+const mentionUserIdSchema = z
+  .string()
+  .trim()
+  .regex(/^[UW][A-Z0-9]+$/);
+
 export function buildSlackMessage(
   input: CollectorNotification,
   environment: NodeJS.ProcessEnv,
@@ -62,6 +67,8 @@ export function buildSlackMessage(
     `run ID: ${escapeSlack(context.runId)}`,
     `所要時間: ${(report.durationMs / 1000).toFixed(1)}秒（最終試行）`,
   ];
+  const mentionUserId = mentionUserIdSchema.safeParse(environment.SLACK_MENTION_USER_ID);
+  if (mentionUserId.success) lines.unshift(`<@${mentionUserId.data}>`);
   if (result)
     lines.push(
       `処理成功: ${result.articleCount}件 / 重複スキップ: ${report.skippedDuplicateCount}件`,
