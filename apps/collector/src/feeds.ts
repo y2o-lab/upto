@@ -133,7 +133,10 @@ async function fetchText(url: string, fetcher: FetchLike): Promise<string> {
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch ${url}: ${response.status} ${response.statusText}`);
+    throw Object.assign(
+      new Error(`Failed to fetch ${url}: ${response.status} ${response.statusText}`),
+      { status: response.status },
+    );
   }
 
   return response.text();
@@ -148,7 +151,10 @@ async function fetchJson(url: string, fetcher: FetchLike): Promise<unknown> {
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch ${url}: ${response.status} ${response.statusText}`);
+    throw Object.assign(
+      new Error(`Failed to fetch ${url}: ${response.status} ${response.statusText}`),
+      { status: response.status },
+    );
   }
 
   return response.json();

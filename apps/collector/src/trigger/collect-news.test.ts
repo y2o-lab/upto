@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { RunCollectorResult } from "../run-collector.js";
 
+import { readFailureReport } from "../notifications/collector-report.js";
 import {
   CollectorTaskError,
   executeCollectNewsTask,
@@ -17,6 +18,79 @@ function createLogger() {
 }
 
 describe("executeCollectNewsTask", () => {
+  it("collects bounded safe issues, duplicate counts and metrics warnings", async () => {
+    const result = await executeCollectNewsTask({
+      attemptNumber: 1,
+      logger: createLogger(),
+      runId: "run_report",
+      now: sequenceClock(100, 200),
+      execute: async (input) => {
+        const log = input!.dependencies!.logger!;
+        log({ status: "article_skipped_duplicate" });
+        log({
+          status: "article_duplicate_metrics_update_failed",
+          feed: "Example",
+          errorDetails: { stage: "metrics_update", kind: "database" },
+        });
+        for (let i = 0; i < 12; i++)
+          log({
+            status: "article_failed",
+            feed: "Example",
+            error: "secret",
+            errorDetails: {
+              stage: "summarize",
+              kind: "rate_limit",
+              httpStatus: 429,
+              message: "secret",
+            },
+          });
+        return {
+          articleCount: 0,
+          dryRun: false,
+          failedCount: 12,
+          failedFeedCount: 0,
+          feedCount: 1,
+          successfulFeedCount: 1,
+        };
+      },
+    });
+    expect(result.notificationReport).toMatchObject({
+      durationMs: 100,
+      skippedDuplicateCount: 1,
+      metricsFailedCount: 1,
+    });
+    expect(result.notificationReport.issues).toHaveLength(10);
+    expect(result.notificationReport.issues[1]).toEqual({
+      stage: "summarize",
+      kind: "rate_limit",
+      httpStatus: 429,
+      feed: "Example",
+    });
+    expect(JSON.stringify(result.notificationReport)).not.toContain("secret");
+  });
+
+  it("retains safe failure details through the generic task error", async () => {
+    let caught: unknown;
+    try {
+      await executeCollectNewsTask({
+        attemptNumber: 2,
+        logger: createLogger(),
+        runId: "run_failure",
+        now: sequenceClock(100, 150),
+        execute: async () => {
+          throw Object.assign(new Error("secret-token"), { status: 429 });
+        },
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(CollectorTaskError);
+    expect(readFailureReport(caught)).toMatchObject({
+      durationMs: 50,
+      issues: [{ stage: "execution", kind: "rate_limit", httpStatus: 429 }],
+    });
+    expect(String(caught)).not.toContain("secret-token");
+  });
   it("returns the collector result and includes run context in structured logs", async () => {
     const logger = createLogger();
     const result: RunCollectorResult = {
@@ -37,7 +111,7 @@ describe("executeCollectNewsTask", () => {
         now: sequenceClock(1_000, 1_250),
         runId: "run_123",
       }),
-    ).resolves.toBe(result);
+    ).resolves.toMatchObject(result);
 
     expect(execute).toHaveBeenCalledOnce();
     expect(logger.info).toHaveBeenCalledWith("Collector run started", {
@@ -71,7 +145,7 @@ describe("executeCollectNewsTask", () => {
         now: sequenceClock(100, 150),
         runId: "run_partial",
       }),
-    ).resolves.toBe(result);
+    ).resolves.toMatchObject(result);
 
     expect(logger.warn).toHaveBeenCalledWith("Collector run completed with errors", {
       ...result,
@@ -145,7 +219,7 @@ describe("executeCollectNewsTask", () => {
         logger,
         runId: "run_failed",
       }),
-    ).rejects.toEqual(new CollectorTaskError());
+    ).rejects.toBeInstanceOf(CollectorTaskError);
 
     expect(logger.error).toHaveBeenCalledWith("Collector run failed", {
       attemptNumber: 1,
