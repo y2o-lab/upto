@@ -56,6 +56,7 @@ knowledge_base:
     enabled: true
     # AGENTS.md は自動検出されるため、既存の規約をここに転記しない。
     filePatterns:
-      - "docs/adr/*.md"
+      - files: "docs/adr/*.md"
+        applyTo: "**/*"
       - files: "DESIGN.md"
         applyTo: "apps/web/**"
