@@ -85,6 +85,7 @@ Trigger.dev dashboardのProject Settings > Environment Variablesでstaging / pro
 | `SUMMARY_CHUNK_CHARS`          |     No | 要約chunk文字数                              | `12000`                                  |
 | `SLACK_NOTIFICATIONS_ENABLED`  |     No | Slack Incoming Webhook通知を有効化           | 通常は`false`、本番で`true`              |
 | `SLACK_WEBHOOK_URL`            |    Yes | 通知先チャンネルのIncoming Webhook URL      | Slack Appで発行                          |
+| `SLACK_MENTION_USER_ID`        |     No | 全Slack通知でメンションするユーザーID       | 省略時はメンションなし                   |
 | `TRIGGER_RUN_URL_TEMPLATE`     |     No | 実行画面URL。run ID部分を`{runId}`に置換     | 省略時はリンクなし                       |
 
 secret作成時はTrigger.devのSecret指定を有効にする。DB URL、API key、記事本文、LLM生レスポンスをtask logへ出さない。
@@ -216,6 +217,8 @@ Trigger.dev dashboardのRunsから以下を確認する。
 5. `SLACK_NOTIFICATIONS_ENABLED=true`、`DEBUG=false`、`COLLECTOR_DRY_RUN=false`を設定する。通知は明示的に有効化するまで送らない。DEBUG・dry-runでは有効化済みでも送らない。
 6. 実行画面へのリンクを載せる場合、対象セルフホスト環境の実際のrun URLをコピーし、run ID部分だけを`{runId}`に置換して`TRIGGER_RUN_URL_TEMPLATE`へ設定する。プロジェクト・組織などのパスは実環境の値を保持する。省略時はrun IDのみを通知する。
 7. 通知対応コードをstaging、次にproductionへdeployし、件数`1`で手動実行して確認する。staging通知を確認するときもDEBUG・dry-runは無効にし、少数の記事を実際に処理する。必要ならstaging用に別チャンネル・Webhookを発行する。
+
+メンションする場合は、Trigger.devの対象environmentに`SLACK_MENTION_USER_ID=U012AB3CD`のようにユーザーIDを1件設定する。`<@...>`や表示名ではなく、Slackのプロフィールのメニューから「メンバーIDをコピー」で取得したIDを使う。通知先チャンネルに対象ユーザーを参加させる。成功・一部失敗・最終失敗の全通知の先頭にメンションを追加する。前後の空白は除去し、未設定・空文字・不正な形式（`U`または`W`で始まる大文字英数字以外）の場合はメンションなしで通知を継続する。ユーザーグループや複数IDの指定には対応しない。メンション形式と通知先チャンネルの参加条件は[Slack公式ドキュメント](https://docs.slack.dev/messaging/formatting-message-text/#mentioning-users)を参照する。
 
 ### 通知内容と障害時の挙動
 
