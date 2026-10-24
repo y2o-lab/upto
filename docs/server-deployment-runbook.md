@@ -83,6 +83,9 @@ Trigger.dev dashboardのProject Settings > Environment Variablesでstaging / pro
 | `COLLECTOR_CONCURRENCY`        |     No | 記事処理並列数                               | 初期は`1`                                |
 | `COLLECTOR_MAX_ITEMS_PER_FEED` |     No | feedごとの最大件数                           | staging初回は`1`、productionは`20`以下   |
 | `SUMMARY_CHUNK_CHARS`          |     No | 要約chunk文字数                              | `12000`                                  |
+| `SLACK_NOTIFICATIONS_ENABLED`  |     No | Slack Incoming Webhook通知を有効化           | 通常は`false`、本番で`true`              |
+| `SLACK_WEBHOOK_URL`            |    Yes | 通知先チャンネルのIncoming Webhook URL      | Slack Appで発行                          |
+| `TRIGGER_RUN_URL_TEMPLATE`     |     No | 実行画面URL。run ID部分を`{runId}`に置換     | 省略時はリンクなし                       |
 
 secret作成時はTrigger.devのSecret指定を有効にする。DB URL、API key、記事本文、LLM生レスポンスをtask logへ出さない。
 
@@ -199,6 +202,32 @@ Trigger.dev dashboardのRunsから以下を確認する。
 `gemini_rate_limit_wait`は、Gemini送信前にRPM枠が空くまで待機したことだけを示す構造化ログである。記事本文、URL、API key、Gemini生レスポンスは出力しない。待機が継続して増える場合は、Gemini usage / quotaと`GEMINI_REQUESTS_PER_MINUTE`、記事件数、長文記事数を照合して調整する。
 
 再実行はRunsから対象runを選択してReplay / Reattemptする。再実行後は同一`normalized_url`の重複がなく、要約済み記事で不要なGemini呼出しがないことを確認する。
+
+## Slack通知
+
+通知はcollectorの`collect-news`タスクからSlack Incoming WebhookへHTTPSで送る。オンプレに通知専用の常駐Botや公開HTTP受信口を追加する必要はない。runnerから`hooks.slack.com:443`への通信を許可する。
+
+### 初期設定
+
+1. Slackで通知先チャンネルを作成する。
+2. [Slack App管理画面](https://api.slack.com/apps)でFrom scratchからAppを作成する。名前・アイコンはこのAppで設定する。
+3. Incoming Webhooksを有効にし、Add New Webhook to Workspaceで通知先チャンネルを選択する。ワークスペースによっては管理者承認が必要となる。
+4. 発行されたURLをTrigger.devの対象environmentに`SLACK_WEBHOOK_URL`としてSecret登録する。URLをGit、Docker build args、CLI引数、ログへ出さない。
+5. `SLACK_NOTIFICATIONS_ENABLED=true`、`DEBUG=false`、`COLLECTOR_DRY_RUN=false`を設定する。通知は明示的に有効化するまで送らない。DEBUG・dry-runでは有効化済みでも送らない。
+6. 実行画面へのリンクを載せる場合、対象セルフホスト環境の実際のrun URLをコピーし、run ID部分だけを`{runId}`に置換して`TRIGGER_RUN_URL_TEMPLATE`へ設定する。プロジェクト・組織などのパスは実環境の値を保持する。省略時はrun IDのみを通知する。
+7. 通知対応コードをstaging、次にproductionへdeployし、件数`1`で手動実行して確認する。staging通知を確認するときもDEBUG・dry-runは無効にし、少数の記事を実際に処理する。必要ならstaging用に別チャンネル・Webhookを発行する。
+
+### 通知内容と障害時の挙動
+
+- 正常完了: 処理成功記事数、重複スキップ数、feed取得成功数、最終試行の所要時間、環境、試行回数、run ID。
+- 一部失敗: 上記に記事失敗数、feed取得失敗数、指標更新失敗数を追加する。指標更新だけの失敗も警告通知になる。記事ごとの送信は行わず、代表的なエラーを最大10件まとめる。
+- 最終失敗: Trigger.devの`onFailure`から、リトライ終了後に通知する。失敗した試行の安全なエラー情報を載せる。途中で中断した場合、確定していない処理件数は載せない。最初の試行が失敗して次の試行が成功した場合、成功した試行の結果を1件通知する。
+- エラー詳細は処理段階、feed名、固定の原因分類、取得できたHTTPステータスに限定する。分類不能なものは未分類と表示する。例外メッセージ全文、スタックトレース、記事URL・本文、LLM生レスポンス、接続文字列をSlackへ送らない。最終失敗の安全な集計は、Trigger.devの例外シリアライズを越えて保持できるよう`CollectorTaskError`のmessageへJSON形式で含める。
+- Slack送信は1回5秒、最大2回に制限する。429・5xx・通信失敗だけを追加試行し、429のRetry-Afterは最大5秒まで待つ。送信失敗は安全な警告ログへ記録し、collector本体の成功・失敗やTrigger.devの再試行には影響させない。通信結果が不明な再送では通知が重複する場合があり、通知の到達保証は行わない。
+- Webhook未設定・設定不正の場合もcollectorは継続する。有効化済みで未設定・不正の場合は警告ログを確認する。Slackのエラーレスポンス本文やWebhook URLはログへ出さない。
+- `onFailure`が動かないクラッシュ、システム障害、キャンセル、Trigger.dev停止、schedule未実行はこの通知では検出できない。基盤の死活監視・実行欠落監視で補う。
+
+Webhookが漏洩・失効した場合はSlack側で無効化・再発行し、Trigger.devのSecretを更新する。通知が届かない場合は有効化設定、DEBUG・dry-run、チャンネルの状態、Webhookの有効性、外向きHTTPS通信、`Slack notification`警告ログを確認する。
 
 ## DB migration
 

@@ -5,6 +5,12 @@ import {
   executeCollector,
   type ExecuteCollectorInput,
 } from "../execute-collector.js";
+import {
+  collectorIssueSchema,
+  describeCollectorError,
+  serializeFailureReport,
+  type CollectorReport,
+} from "../notifications/collector-report.js";
 
 export type TriggerTaskLogger = {
   error(message: string, attributes?: Record<string, unknown>): void;
@@ -21,17 +27,25 @@ export type ExecuteCollectNewsTaskInput = {
 };
 
 export class CollectorTaskError extends Error {
-  constructor() {
-    super("Collector task failed.");
+  constructor(report?: CollectorReport) {
+    super(report ? serializeFailureReport(report) : "Collector task failed.");
     this.name = "CollectorTaskError";
   }
 }
 
+export type CollectNewsTaskResult = RunCollectorResult & { notificationReport: CollectorReport };
+
 export async function executeCollectNewsTask(
   input: ExecuteCollectNewsTaskInput,
-): Promise<RunCollectorResult> {
+): Promise<CollectNewsTaskResult> {
   const now = input.now ?? Date.now;
   const startedAt = now();
+  const report: CollectorReport = {
+    durationMs: 0,
+    issues: [],
+    metricsFailedCount: 0,
+    skippedDuplicateCount: 0,
+  };
   const context = {
     attemptNumber: input.attemptNumber,
     runId: input.runId,
@@ -42,7 +56,26 @@ export async function executeCollectNewsTask(
   try {
     const result = await (input.execute ?? executeCollector)({
       dependencies: {
-        logger: (event) => logCollectorEvent(input.logger, context, event),
+        logger: (event) => {
+          if (event.status === "article_skipped_duplicate") report.skippedDuplicateCount++;
+          if (event.status === "article_duplicate_metrics_update_failed")
+            report.metricsFailedCount++;
+          if (
+            ["article_failed", "feed_failed", "article_duplicate_metrics_update_failed"].includes(
+              String(event.status),
+            ) &&
+            report.issues.length < 10
+          ) {
+            const issue = collectorIssueSchema.safeParse(event.errorDetails);
+            report.issues.push({
+              ...(issue.success
+                ? issue.data
+                : { stage: "execution" as const, kind: "unknown" as const }),
+              ...(typeof event.feed === "string" ? { feed: event.feed.slice(0, 80) } : {}),
+            });
+          }
+          logCollectorEvent(input.logger, context, event);
+        },
       },
     });
     const attributes = {
@@ -51,20 +84,24 @@ export async function executeCollectNewsTask(
       durationMs: Math.max(0, now() - startedAt),
     };
 
-    if (result.failedCount > 0) {
+    if (result.failedCount > 0 || report.metricsFailedCount > 0) {
       input.logger.warn("Collector run completed with errors", attributes);
     } else {
       input.logger.info("Collector run completed", attributes);
     }
 
-    return result;
+    report.durationMs = attributes.durationMs;
+    return { ...result, notificationReport: report };
   } catch (error) {
+    report.durationMs = Math.max(0, now() - startedAt);
+    if (report.issues.length === 10) report.issues.pop();
+    report.issues.push(describeCollectorError(error));
     input.logger.error("Collector run failed", {
       ...context,
       ...safeErrorCode(error),
       errorType: safeErrorType(error),
     });
-    throw new CollectorTaskError();
+    throw new CollectorTaskError(report);
   }
 }
 
@@ -119,6 +156,9 @@ function sanitizeCollectorEvent(event: Record<string, unknown>): Record<string, 
       return name && kind ? [{ kind, name }] : [];
     });
   }
+
+  const details = collectorIssueSchema.safeParse(event.errorDetails);
+  if (details.success) sanitized.errorDetails = details.data;
 
   return sanitized;
 }

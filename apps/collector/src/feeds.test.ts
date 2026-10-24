@@ -3,6 +3,20 @@ import { describe, expect, it } from "vitest";
 import { fetchFeedItems, type FeedTarget } from "./feeds.js";
 
 describe("fetchFeedItems", () => {
+  it("retains HTTP status for safe error notifications", async () => {
+    await expect(
+      fetchFeedItems(
+        {
+          kind: "rss",
+          name: "Example",
+          siteUrl: "https://example.com",
+          url: "https://example.com/feed.xml",
+        },
+        1,
+        async () => new Response("private upstream body", { status: 503 }),
+      ),
+    ).rejects.toMatchObject({ status: 503 });
+  });
   it("parses RSS 1.0 RDF feeds such as Hatena Bookmark", async () => {
     const feed: FeedTarget = {
       kind: "rss",
