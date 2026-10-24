@@ -29,12 +29,12 @@
     "@storybook/addon-vitest": "10.6.3",
     "@storybook/nextjs-vite": "10.6.3",
     "@tailwindcss/postcss": "4.3.3",
-    "@vitest/browser-playwright": "4.1.12",
+    "@vitest/browser-playwright": "5.0.5",
     "@vitest/ui": "5.0.5",
     "fake-indexeddb": "6.2.6",
     "storybook": "10.6.3",
     "tailwindcss": "4.3.3",
     "vite": "8.3.3",
-    "vitest": "4.1.12"
+    "vitest": "5.0.5"
   }
 }
