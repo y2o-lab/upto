@@ -2,11 +2,11 @@ name: CodeQL
 
 on:
   pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
-      - release
-      - release-infra
   merge_group:
   schedule:
     # 毎週水曜 12:23 JST。定刻直後の混雑を避け、最新のクエリでも再解析する。
@@ -22,6 +22,11 @@ concurrency:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
+    # 手動実行と merge queue を含め、main 向けの解析に限定する。
+    if: >-
+      github.ref == 'refs/heads/main' ||
+      github.base_ref == 'main' ||
+      github.event.merge_group.base_ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
