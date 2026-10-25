@@ -20,7 +20,7 @@ jobs:
         run: sh apps/web/e2e/visual/run.sh
       - name: Upload visual comparison report and failure evidence
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: visual-regression-report
           path: |
@@ -55,7 +55,7 @@ jobs:
         run: pnpm test:e2e
       - name: Upload Playwright report and failure evidence
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: |
