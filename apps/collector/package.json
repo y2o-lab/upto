@@ -15,9 +15,9 @@
     "typecheck": "pnpm --dir ../.. exec tsc -b apps/collector/tsconfig.json"
   },
   "dependencies": {
-    "@google/genai": "2.30.0",
+    "@google/genai": "2.31.0",
     "@mozilla/readability": "0.6.0",
-    "@trigger.dev/sdk": "4.7.7",
+    "@trigger.dev/sdk": "4.8.1",
     "@upto/db": "workspace:0.1.0",
     "@upto/domain": "workspace:0.1.0",
     "fast-xml-parser": "5.11.2",
@@ -27,7 +27,7 @@
   },
   "devDependencies": {
     "@types/jsdom": "30.0.0",
-    "trigger.dev": "4.7.7",
+    "trigger.dev": "4.8.1",
     "typescript": "7.0.2"
   }
 }
