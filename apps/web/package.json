@@ -18,23 +18,23 @@
     "@upto/domain": "workspace:0.1.0",
     "@vercel/analytics": "2.0.1",
     "@vercel/speed-insights": "2.0.0",
-    "dexie": "4.4.6",
-    "next": "16.4.2",
+    "dexie": "4.4.7",
+    "next": "16.4.3",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "zod": "4.6.7"
   },
   "devDependencies": {
-    "@storybook/addon-docs": "10.6.3",
-    "@storybook/addon-vitest": "10.6.3",
-    "@storybook/nextjs-vite": "10.6.3",
+    "@storybook/addon-docs": "10.6.4",
+    "@storybook/addon-vitest": "10.6.4",
+    "@storybook/nextjs-vite": "10.6.4",
     "@tailwindcss/postcss": "4.3.3",
     "@vitest/browser-playwright": "5.0.5",
     "@vitest/ui": "5.0.5",
     "fake-indexeddb": "6.2.6",
-    "storybook": "10.6.3",
+    "storybook": "10.6.4",
     "tailwindcss": "4.3.3",
-    "vite": "8.3.3",
+    "vite": "8.3.5",
     "vitest": "5.0.5"
   }
 }
