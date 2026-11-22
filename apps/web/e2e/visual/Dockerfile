@@ -1,5 +1,5 @@
 # Match @playwright/test in package.json. Always run as linux/amd64, including on Apple Silicon.
-FROM mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea
+FROM mcr.microsoft.com/playwright:v1.65.1-noble@sha256:1507cbfc550a63a6b7396791ca4f00df17beb56342d2447b3f106c306f525579
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV UPTO_WEB_USE_FIXTURE_DATA=true
