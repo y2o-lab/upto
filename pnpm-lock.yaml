@@ -7,7 +7,7 @@ settings:
 overrides:
   '@opentelemetry/core': 3.1.1
   body-parser@>=2.0.0 <2.4.0: 2.4.0
-  cookie: 0.7.2
+  cookie: 2.0.2
   deepmerge-ts: 8.0.2
   engine.io: 6.6.12
   esbuild: 0.28.2
@@ -2612,9 +2612,9 @@ packages:
     resolution: {integrity: sha512-D76uU73ulSXrD1UXF4KE2TMxVVwhsnCgfAyTg9k8P6KGZjlXKrOLe4dJQKI3Bxi5wjesZoFXJWElNWBjPZMbhg==}
     engines: {node: '>=6.6.0'}
 
-  cookie@0.7.2:
-    resolution: {integrity: sha512-yki5XnKuf750l50uGTllt6kKILY4nQ1eNIQatoXEByZ5dWgnKqbnqmTrBE5B4N7lrMJKQ2ytWMiTO2o0v6Ew/w==}
-    engines: {node: '>= 0.6'}
+  cookie@2.0.2:
+    resolution: {integrity: sha512-SL0cVuEdETEp7pN0FuZb01toc3vnODEfVUCooxG1SJN0yIirh7JMb9X9bvfCFf0vzzbT68RdbKDHYTiWy7a7iw==}
+    engines: {node: '>=22'}
 
   cors@2.8.6:
     resolution: {integrity: sha512-tJtZBBHA6vjIAaF6EnIaq6laBBP9aq/Y3ouVJjEfoHbRBcHBAHYcMh/w8LDrk2PvIMMq8gmopa5D4V8RmbrxGw==}
@@ -6383,7 +6383,7 @@ snapshots:
 
   cookie-signature@1.2.2: {}
 
-  cookie@0.7.2: {}
+  cookie@2.0.2: {}
 
   cors@2.8.6:
     dependencies:
@@ -6622,7 +6622,7 @@ snapshots:
       body-parser: 2.4.0(supports-color@10.2.2)
       content-disposition: 1.1.0
       content-type: 1.0.5
-      cookie: 0.7.2
+      cookie: 2.0.2
       cookie-signature: 1.2.2
       debug: 4.4.3(supports-color@10.2.2)
       depd: 2.0.0
