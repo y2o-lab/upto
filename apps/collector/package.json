@@ -17,7 +17,7 @@
   "dependencies": {
     "@google/genai": "2.32.0",
     "@mozilla/readability": "0.6.0",
-    "@trigger.dev/sdk": "4.8.8",
+    "@trigger.dev/sdk": "4.8.10",
     "@upto/db": "workspace:0.1.0",
     "@upto/domain": "workspace:0.1.0",
     "fast-xml-parser": "5.12.1",
@@ -27,7 +27,7 @@
   },
   "devDependencies": {
     "@types/jsdom": "30.0.0",
-    "trigger.dev": "4.8.8",
+    "trigger.dev": "4.8.10",
     "typescript": "7.0.2"
   }
 }
